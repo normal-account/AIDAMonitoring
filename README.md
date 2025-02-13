@@ -73,8 +73,8 @@ You can confirm the configuration file has been loaded correctly by displaying t
 
 ```sql
 psql -U admin -d benchbase
-SHOW track_activities
-SHOW track_counts
+SHOW track_activities;
+SHOW track_counts;
 ```
 
 And so on. 
