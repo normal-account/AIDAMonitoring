@@ -34,8 +34,10 @@ See the benchbase GitHub page for more details: https://github.com/cmu-db/benchb
 
 Statistics are enabled by defaut. To disable them, first open the Postgres configuration file:
 
-`cd /home/build/postgres/`
-`vim pg_storeddata/postgresql.conf`
+```
+cd /home/build/postgres/
+vim pg_storeddata/postgresql.conf
+```
 
 Scroll down to the `STATISTICS` section and disable all options by turning them to `off` or `none`.
 
@@ -47,8 +49,10 @@ or
 
 Once the modifications have been made, reload the postgres config:
 
-`psql -U admin -d benchbase`
-`SELECT pg_reload_conf();` # From the psql client
+```
+psql -U admin -d benchbase
+SELECT pg_reload_conf();
+```
 
 If you want to restart the Postgres server instead of dynamically reloading the config, you can run the `./start_db.sh` script:
 
@@ -57,9 +61,11 @@ If you want to restart the Postgres server instead of dynamically reloading the 
 
 You can confirm the configuration file has been loaded correctly by displaying the modified configurations via psql:
 
-`psql -U admin -d benchbase`
-`SHOW track_activities`
-`SHOW track_counts`
+```
+psql -U admin -d benchbase
+SHOW track_activities
+SHOW track_counts
+```
 
 And so on. 
 
