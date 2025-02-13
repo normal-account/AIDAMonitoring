@@ -54,9 +54,9 @@ Scroll down to the `STATISTICS` section and disable all options by turning them 
 Alternatively, you can simply overwrite the default configuration file with the example configuration files copied with this project:
 
 ```bash
-mv postgresql_stats_on.conf pg_storeddata/postgresql.conf  # To enable stats (default)
+cp postgresql_stats_on.conf pg_storeddata/postgresql.conf  # To enable stats (default)
 # or
-mv postgresql_stats_off.conf pg_storeddata/postgresql.conf # To disable stats
+cp postgresql_stats_off.conf pg_storeddata/postgresql.conf # To disable stats
 ```
 
 Once the modifications have been made, reload the postgres config:
