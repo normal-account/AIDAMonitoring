@@ -1,4 +1,4 @@
-### To create the PostgreSQL container:
+# Creating the PostgreSQL container:
 
 The container can be launched using the docker-compose.yml file. Simply run the following command:
 
@@ -11,7 +11,8 @@ Then, attach to the container :
 `docker container exec -it postgres_aida /bin/bash`
 
 
-### Running Benchbase benchmarks
+
+# Running Benchbase benchmarks
 
 Travel to the benchbase folder :
 
@@ -28,7 +29,8 @@ Configuration files for each benchmark can be found under `config/postgres`.
 See the benchbase GitHub page for more details: https://github.com/cmu-db/benchbase
 
 
-### Disabling statistics in Postgres
+
+# Disabling statistics in Postgres
 
 Statistics are enabled by defaut. To disable them, first open the Postgres configuration file:
 
@@ -52,6 +54,7 @@ If you want to restart the Postgres server instead of dynamically reloading the 
 
 `/home/build/postgres/start_db.sh`
 
+
 You can confirm the configuration file has been loaded correctly by displaying the modified configurations via psql:
 
 `psql -U admin -d benchbase`
@@ -61,7 +64,8 @@ You can confirm the configuration file has been loaded correctly by displaying t
 And so on. 
 
 
-### Running AIDA
+
+# Running AIDA
 
 AIDA is not necessary for running benchmarks. You can still set it up for test purposes.
 
