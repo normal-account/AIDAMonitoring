@@ -17,7 +17,7 @@ docker container exec -it postgres_aida /bin/bash
 
 # Running Benchbase benchmarks
 
-Travel to the benchbase folder :
+Travel to the Benchbase folder :
 
 ```bash
 cd /home/build/benchbase
@@ -30,6 +30,9 @@ From there, a script is available (`run_benchmark.sh`). Run it to launch a bench
 ```
 
 To display the list of available benchmarks, you can also run the script without arguments.
+
+Note that Benchbase outputs on STDOUT by default, so you may want to redirect the script's output to a file. 
+
 
 Configuration files for each benchmark can be found under `config/postgres`. 
 
