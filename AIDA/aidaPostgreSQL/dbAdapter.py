@@ -173,6 +173,35 @@ class DBCPostgreSQL(DBC):
         (data, rows) = self._executeQry(sql)
         return data["buffer_hit_rate"][0]
 
+    def _getResponseTime(self):
+        sql = \
+            "SELECT AVG( "\
+            "CASE "\
+                "WHEN rows > 0 THEN ( ( total_plan_time + total_exec_time ) * 1000 ) / rows " \
+                "ELSE NULL " \
+            "END) AS avg_response_time " \
+            "FROM pg_stat_statements;"
+
+        (data, rows) = self._executeQry(sql)
+
+        return data["avg_response_time"][0]
+
+    def _getThroughput(self):
+        sql = \
+            "SELECT AVG( "\
+            "CASE "\
+                "WHEN rows > 0 THEN rows / ( total_plan_time + total_exec_time ) " \
+                "ELSE NULL " \
+            "END) AS throughput " \
+            "FROM pg_stat_statements;"
+
+        (data, rows) = self._executeQry(sql)
+
+        return data["throughput"][0]
+
+    def _resetPgStatStatements(self):
+        self._executeQry("SELECT pg_stat_statements_reset();")
+
     def _execution(self, sql, resultFormat='column', sqlType=DBC.SQLTYPE.SELECT):
         """Execute a query and return results"""
         #TODO: either support row format results or throw an exception for not supported.

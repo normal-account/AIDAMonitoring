@@ -323,9 +323,20 @@ class DBCRemoteStub(aidacommon.rop.RObjStub):
     def _load(self,model_name):
         pass
 
-
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _getBufferHitRate(self):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _getResponseTime(self):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _getThroughput(self):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _resetPgStatStatements(self):
         pass
 
     # @aidacommon.rop.RObjStub.RemoteMethod()

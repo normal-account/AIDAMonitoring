@@ -126,3 +126,5 @@ CREATE OR REPLACE AGGREGATE median(anycompatible) (
   FINALFUNC=_final_median,
   INITCOND='{}'
 );
+
+CREATE EXTENSION pg_stat_statements;

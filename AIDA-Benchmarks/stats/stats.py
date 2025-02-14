@@ -1,66 +1,103 @@
 from aida.aida import *
 import pandas as pd
 import numpy as np
+import time
+import matplotlib.pyplot as plt
+import requests
 
 host = 'localhost'
-dbname = 'bixi'
-user = 'bixi'
-passwd = 'bixi'
+dbname = 'benchbase'
+user = 'test01'
+passwd = 'password'
 jobName = 'job1'
 port = 55660
 
+# # URL of your Prometheus server's API
+# PROMETHEUS_URL = "http://localhost:9090/api/v1/query"
+
+# # Function to query Prometheus for the up metric
+# def get_up_metric():
+#     query = 'up{job="your-job-name"}'  # Change to your job name
+#     response = requests.get(PROMETHEUS_URL, params={'query': query})
+#     data = response.json()
+    
+#     # Extract the value of the 'up' metric
+#     if data['status'] == 'success' and 'data' in data:
+#         return int(data['data']['result'][0]['value'][1])  # Return the value (1 or 0)
+#     return 0
+
+# # Initial value of the 'up' metric
+# previous_value = get_up_metric()
+
 dw = AIDA.connect(host,dbname,user,passwd,jobName,port)
 
-print(type(dw))
-print(dw._getBufferHitRate())
+x = []
+y_response = []
+y_throughput = []
 
-#data1 = dw.pg_locks
-#data1 = dw.tripdata2017
+print("Waiting...")
+hit = 0
+while hit < 30:
+    val = dw._getResponseTime()
+    if None == val:
+        hit = 0
+    else:
+        hit += 1
+    time.sleep(0.5)
+
+print("Starting measurement.")
+
+i = 0
+responseTime = -1
+
+while responseTime != 0:
+    i += 1
+
+    # Getting response time
+    responseTime = dw._getResponseTime()
+
+    if responseTime == None:
+        responseTime = 0
+
+    y_response.append( responseTime )
 
 
-#print(type(data1))
+    # Getting throughput
+    throughput = dw._getThroughput()
 
-#print(data1.head())
+    if throughput == None:
+        throughput = 0
 
-# training_set = dw.tripdata2017.join(dw.gmdata2017, ('stscode', 'endscode'), ('stscode', 'endscode')
-#                                 , ('id', 'duration', 'ismember', 'stscode', 'endscode'), ('gdistm', 'gduration'))
+    y_throughput.append( throughput )
 
-# # for regression test, we use the gdistm and gduration to predict the actual duration of a trip
-# regression_x = training_set[:, ['gdistm', 'gduration']]
-# regression_y = training_set[:, ['duration']]
 
-# regression_predict = np.array([[580, 867], [90, 160], [3050, 2256]])
-# regression_rs = pd.DataFrame(data=regression_predict, columns=['gdistm', 'gduration'])
+    # Resetting pg_stat_statements
+    dw._resetPgStatStatements()
 
-# # for linear regression, we use the start/end station and the duration to predict if the user is a member
-# tree_x = training_set[:, ['stscode', 'endscode', 'duration']]
-# tree_y = training_set[:, ['ismember']]
+    x.append( i )
 
-# tree_predict = [[6154,6148, 100], [6148, 6154, 427], [6062, 6062, 605]]
-# tree_rs = pd.DataFrame(data=tree_predict, columns=['stscode', 'endscode', 'duration'])
+    print( "Response time : " + str(responseTime) )
+    print( "Throughput : " + str(throughput) )
 
-# # train and eval with linear regression
-# model = dw._linearRegression()
-# model.fit(regression_x, regression_y)
-# rs = model.predict(regression_predict)
-# regression_rs['linear_y'] = rs
+    time.sleep( 1 )
+    
+plt.plot(x, y_response, label='Response time per second')
+plt.title("TPCH Response Time (no exporter)")
+plt.xlabel("Time (s)")
+plt.ylabel("Response time")
+plt.legend()
+plt.grid()
+#plt.show()
+plt.savefig("response_time.png")
 
-# # train and eval with logistic regression
-# model = dw._logisticRegression()
-# model.fit(regression_x, regression_y)
-# rs = model.predict(regression_predict)
-# regression_rs['logistic_y'] = rs
-
-# print(regression_rs)
-
-# # train and eval with decision tree
-# model = dw._decisionTree()
-# model.fit(tree_x, tree_y)
-# tree_rs['tree_y'] = model.predict(tree_predict)
-
-# # view the input and the predicted value
-# print(tree_rs)
-
+plt.plot(x, y_response, label='Query throughput per second')
+plt.title("TPCH Throughput (no exporter)")
+plt.xlabel("Time (s)")
+plt.ylabel("Throughput (qps)")
+plt.legend()
+plt.grid()
+#plt.show()
+plt.savefig("throughput.png")
 
 dw._close()
 

@@ -676,6 +676,15 @@ class DBC(metaclass=ABCMeta):
     def _getBufferHitRate(self): pass;
 
     @abstractmethod
+    def _getResponseTime(self): pass;
+
+    @abstractmethod
+    def _getThroughput(self): pass;
+
+    @abstractmethod
+    def _resetPgStatStatements(self): pass;
+
+    @abstractmethod
     def _agg(self, agfn, tblrData, collist=None, valueOnly=True): pass;
 
     def _close(self):
