@@ -4,6 +4,8 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 import requests
+import re
+import threading
 
 host = 'localhost'
 dbname = 'benchbase'
@@ -12,24 +14,45 @@ passwd = 'password'
 jobName = 'job1'
 port = 55660
 
-# # URL of your Prometheus server's API
-# PROMETHEUS_URL = "http://localhost:9090/api/v1/query"
+scrape_seconds = []
+eval_seconds = []
+stop_fetch = False
 
-# # Function to query Prometheus for the up metric
-# def get_up_metric():
-#     query = 'up{job="your-job-name"}'  # Change to your job name
-#     response = requests.get(PROMETHEUS_URL, params={'query': query})
-#     data = response.json()
-    
-#     # Extract the value of the 'up' metric
-#     if data['status'] == 'success' and 'data' in data:
-#         return int(data['data']['result'][0]['value'][1])  # Return the value (1 or 0)
-#     return 0
+# URL of your Prometheus server's API
+PROMETHEUS_URL = "http://localhost:9090/metrics"
 
-# # Initial value of the 'up' metric
-# previous_value = get_up_metric()
+# Function to query Prometheus for the up metric
+def fetch_export_times():
+    global scrape_seconds, eval_seconds, stop_fetch
+    previous_value = 0
+
+    start_time = time.time()
+
+    while not stop_fetch:
+        response = requests.get(PROMETHEUS_URL)
+        if response.status_code == 200:
+
+            metrics_text = response.text
+            # Regex pattern to extract the specific metric value
+            pattern = r'prometheus_target_interval_length_seconds_count\{interval="15s"\} (\d+)'
+            match = re.search(pattern, metrics_text)
+
+            if match:
+                metric_value = int(match.group(1))  # Extract and convert to integer
+                if previous_value != metric_value:
+                    previous_value = metric_value
+                    print(f"Metric Value: {metric_value}")
+
+                    elapsed_seconds = time.time() - start_time
+
+                    if metric_value % 2 == 0:
+                        scrape_seconds.append(elapsed_seconds)
+                    else:
+                        eval_seconds.append( elapsed_seconds )
 
 dw = AIDA.connect(host,dbname,user,passwd,jobName,port)
+
+print( dw._getResponseTime() )
 
 x = []
 y_response = []
@@ -47,11 +70,15 @@ while hit < 30:
 
 print("Starting measurement.")
 
+# Start the monitoring thread
+monitor_thread = threading.Thread(target=fetch_export_times, daemon=True)
+monitor_thread.start()
+
 i = 0
 responseTime = -1
 
 while responseTime != 0:
-    i += 1
+    i += 0.5
 
     # Getting response time
     responseTime = dw._getResponseTime()
@@ -79,25 +106,43 @@ while responseTime != 0:
     print( "Response time : " + str(responseTime) )
     print( "Throughput : " + str(throughput) )
 
-    time.sleep( 1 )
-    
-plt.plot(x, y_response, label='Response time per second')
-plt.title("TPCH Response Time (no exporter)")
-plt.xlabel("Time (s)")
-plt.ylabel("Response time")
-plt.legend()
-plt.grid()
-#plt.show()
-plt.savefig("response_time.png")
+    time.sleep( 0.5 )
 
-plt.plot(x, y_response, label='Query throughput per second')
-plt.title("TPCH Throughput (no exporter)")
+
+# Wait for the thread to finish
+stop_fetch = True
+monitor_thread.join() 
+
+
+x = x[10:]  # Slice x to exclude the first 10 points
+y_response = y_response[10:]  # Slice y to exclude the first 10 points
+
+scrape_seconds = scrape_seconds[1:]
+eval_seconds = eval_seconds[1:]
+
+plt.figure(figsize=(16, 6))  # Width = 10 inches, Height = 6 inches
+plt.plot(x, y_response, label='Response time per second')
+
+ymin, ymax = plt.ylim()
+plt.vlines(x=scrape_seconds, color='r', ymin=ymin, ymax=ymax, linestyle='dashed', label="Scrape")
+plt.vlines(x=eval_seconds, color='g', ymin=ymin, ymax=ymax, linestyle='dashed', label="Evaluation")
+
+plt.title("TPC-H Response Time")
 plt.xlabel("Time (s)")
-plt.ylabel("Throughput (qps)")
+plt.ylabel("Response time (ms)")
 plt.legend()
 plt.grid()
-#plt.show()
-plt.savefig("throughput.png")
+plt.savefig("response_time_tpch.pdf")
+plt.show()
+
+# plt.plot(x, y_response, label='Query throughput per second')
+# plt.title("TPCH Throughput (no exporter)")
+# plt.xlabel("Time (s)")
+# plt.ylabel("Throughput (qps)")
+# plt.legend()
+# plt.grid()
+# #plt.show()
+# plt.savefig("throughput.png")
 
 dw._close()
 

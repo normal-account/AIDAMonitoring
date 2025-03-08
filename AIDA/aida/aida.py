@@ -10,10 +10,15 @@ import aidacommon.aidaConfig;
 
 from aidacommon.dborm import *;
 
+import aidas.dmro as dmro;
+import aidas.aidas as aidas;
+
 #import logging;
 #logging.basicConfig(filename='aida.log', level=logging.INFO);
 
 class AIDA(metaclass=ABCMeta):
+    myvar = 420
+
     @staticmethod
     def connect (host, dbname, user, passwd, jobName=None, port=55660):
 
@@ -40,6 +45,47 @@ class AIDA(metaclass=ABCMeta):
         #TODO check ret and throw it as an exception in case of some error.
         return ret;
 
+    @staticmethod
+    def callback(arg):
+        # Initialize the DMRO repository.
+        try:
+            dmro.DMROrepository('aidasys');
+        except Exception as e:
+            pass
+
+        import aidasys;
+
+        #aidasys.increment()
+
+        return aidasys.memtest
+
+    @staticmethod
+    def udf(arg):
+        import aidas.bootstrap;
+        aidas.bootstrap.bootstrap();
+        
+        import queue;
+        requestQueue = queue.Queue();
+        resultQueue = queue.Queue();
+        memtest = 500
+
+        import aidasys;
+        aidasys.requestQueue = requestQueue;
+        aidasys.resultQueue = resultQueue;
+        aidasys.memtest = memtest
+        conMgr = aidasys.conMgr
+        
+        while True:
+            try:
+                (jobName, request) = requestQueue.get();
+                dbcObj = conMgr.get(jobName);
+                dbcObj._executeRequest(plpy,request);
+                requestQueue.task_done()
+            except Exception as e:
+                logging.info("EXCEPTION : " + str(e));
+                break;
+        
+        return 1
 
 def head(tdata, n=5):
     print(tdata.head(n));

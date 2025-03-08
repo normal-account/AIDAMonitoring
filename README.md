@@ -113,3 +113,5 @@ And finally run the startup script:
 ```
 
 If you want to run AIDA benchmarks, you will need to place the `postgres_data.zip` archive at the root of the project directory. It's currently not in the repository because of its large size.  
+
+Make && make install in pg_stat_statements, then add it in `shared_load_libraries` in the pg config.

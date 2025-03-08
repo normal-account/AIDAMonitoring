@@ -36,7 +36,7 @@ def bootstrap():
 ##    AConfig.DATABASEPORT = serverConfig.getint('DATABASEPORT', defaultConfig['DATABASEPORT']);
 ##    AConfig.DATABASEADAPTER = serverConfig.get('DATABASEADAPTER', defaultConfig['DATABASEADAPTER']);
 ##    AConfig.LOGLEVEL = serverConfig.get('LOGLEVEL', defaultConfig['LOGLEVEL']);
-##    AConfig.LOGFILE = serverConfig.get('LOGFILE', defaultConfig['LOGFILE']);
+##    AConfig.LOGFILE = servermy_python_udfConfig.get('LOGFILE', defaultConfig['LOGFILE']);
 ##    AConfig.RMIPORT = serverConfig.getint('RMIPORT', defaultConfig['RMIPORT']);
 ##    AConfig.CONNECTIONMANAGERPORT = serverConfig.getint('CONNECTIONMANAGERPORT', defaultConfig['CONNECTIONMANAGERPORT']);
 ##    udfType = serverConfig.get('UDFTYPE', defaultConfig['UDFTYPE']);
@@ -56,13 +56,16 @@ def bootstrap():
 
     aidacommon.aidaConfig.loadConfig('AIDASERVER');
 
+    logging.info("Connection manager port : " + str(aidacommon.aidaConfig.AConfig.CONNECTIONMANAGERPORT))
+    logging.info("RMI port : " + str(aidacommon.aidaConfig.AConfig.RMIPORT))
+
     # Initialize the DMRO repository.
     try:
         dmro.DMROrepository('aidasys');
-        import aidasys;
     except Exception as e:
         logging.exception(e);
-        raise;
+
+    import aidasys;
 
     # Startup the remote object manager for RMI.
     robjMgr = rop.ROMgr.getROMgr('', AConfig.RMIPORT, True);
@@ -88,14 +91,17 @@ def bootstrap():
     conMgr = aidas.ConnectionManager.getConnectionManager(dadapt);
     aidasys.conMgr = conMgr;
 
-    #Visualization
-    import builtins;
-    import matplotlib;
-    matplotlib.use('Agg');
-    builtins.matplotlib = matplotlib;
-    import matplotlib.pyplot as plt;
-    builtins.plt = plt;
+    # #Visualization
+    # import builtins;
+    # import matplotlib;
+    # matplotlib.use('Agg');
+    # builtins.matplotlib = matplotlib;
+    # import matplotlib.pyplot as plt;
+    # builtins.plt = plt;
 
-    gBApp = gbackend.GBackendApp(AConfig.DASHPORT)
-    aidasys.gBApp = gBApp;
-    gBApp.start();
+    # gBApp = gbackend.GBackendApp(AConfig.DASHPORT)
+    # aidasys.gBApp = gBApp;
+    # gBApp.start();
+
+def callback(args):
+    logging.info('AIDA: Callback called.')

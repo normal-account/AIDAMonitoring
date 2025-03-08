@@ -114,6 +114,6 @@ RUN adduser --quiet --disabled-password --gecos ""  aida-user && chown -R aida-u
     && echo "aida-user:aida" | chpasswd && usermod -aG sudo aida-user 
 RUN chown aida-user -R /home/build
 USER aida-user
-
+RUN echo ". /home/build/postgres/env.sh" >> /home/aida-user/.bashrc
 
 WORKDIR /home/build

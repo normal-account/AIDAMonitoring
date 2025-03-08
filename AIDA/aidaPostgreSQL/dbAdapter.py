@@ -9,6 +9,8 @@ import pandas as pd;
 
 import psycopg2;
 
+from aida.aida import *;
+
 from aidacommon.aidaConfig import AConfig, UDFTYPE;
 
 from aidacommon.dbAdapter import *;
@@ -123,6 +125,7 @@ class DBCPostgreSQL(DBC):
         import aidasys;
         self.__requestQueue = aidasys.requestQueue;
         self.__resultQueue = aidasys.resultQueue;
+        self.__memtest = aidasys.memtest
 
     def _tables(self):
         sql = DBCPostgreSQL.__TABLE_LIST_QRY__.format(self.dbName);
@@ -184,7 +187,12 @@ class DBCPostgreSQL(DBC):
 
         (data, rows) = self._executeQry(sql)
 
-        return data["avg_response_time"][0]
+        import aidasys;
+
+        aidasys.memtest = aidasys.memtest + 1 
+
+        return aidasys.memtest
+        #return data["avg_response_time"][0]
 
     def _getThroughput(self):
         sql = \

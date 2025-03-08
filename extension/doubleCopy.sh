@@ -1,0 +1,2 @@
+./copyDocker.sh
+./copyAida.sh
