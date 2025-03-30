@@ -34,7 +34,7 @@ def fetch_export_times():
 
             metrics_text = response.text
             # Regex pattern to extract the specific metric value
-            pattern = r'prometheus_target_interval_length_seconds_count\{interval="15s"\} (\d+)'
+            pattern = r'prometheus_target_interval_length_seconds_count\{interval="1s"\} (\d+)'
             match = re.search(pattern, metrics_text)
 
             if match:
@@ -60,7 +60,7 @@ y_throughput = []
 
 print("Waiting...")
 hit = 0
-while hit < 30:
+while hit == 0:
     val = dw._getResponseTime()
     if None == val:
         hit = 0
@@ -104,7 +104,7 @@ while responseTime != 0:
     x.append( i )
 
     print( "Response time : " + str(responseTime) )
-    print( "Throughput : " + str(throughput) )
+    #print( "Throughput : " + str(throughput) )
 
     time.sleep( 0.5 )
 
@@ -113,27 +113,32 @@ while responseTime != 0:
 stop_fetch = True
 monitor_thread.join() 
 
-
 x = x[10:]  # Slice x to exclude the first 10 points
 y_response = y_response[10:]  # Slice y to exclude the first 10 points
 
 scrape_seconds = scrape_seconds[1:]
 eval_seconds = eval_seconds[1:]
 
-plt.figure(figsize=(16, 6))  # Width = 10 inches, Height = 6 inches
-plt.plot(x, y_response, label='Response time per second')
+print(scrape_seconds)
+print("\n")
+print(eval_seconds)
 
-ymin, ymax = plt.ylim()
-plt.vlines(x=scrape_seconds, color='r', ymin=ymin, ymax=ymax, linestyle='dashed', label="Scrape")
-plt.vlines(x=eval_seconds, color='g', ymin=ymin, ymax=ymax, linestyle='dashed', label="Evaluation")
+#print(x)
 
-plt.title("TPC-H Response Time")
-plt.xlabel("Time (s)")
-plt.ylabel("Response time (ms)")
-plt.legend()
-plt.grid()
-plt.savefig("response_time_tpch.pdf")
-plt.show()
+# plt.figure(figsize=(16, 6))  # Width = 10 inches, Height = 6 inches
+# plt.plot(x, y_response, label='Response time per second')
+
+# ymin, ymax = plt.ylim()
+# plt.vlines(x=scrape_seconds, color='r', ymin=ymin, ymax=ymax, linestyle='dashed', label="Scrape")
+# plt.vlines(x=eval_seconds, color='g', ymin=ymin, ymax=ymax, linestyle='dashed', label="Evaluation")
+
+# plt.title("TPC-H Response Time")
+# plt.xlabel("Time (s)")
+# plt.ylabel("Response time (ms)")
+# plt.legend()
+# plt.grid()
+# plt.savefig("response_time_tpch.pdf")
+# plt.show()
 
 # plt.plot(x, y_response, label='Query throughput per second')
 # plt.title("TPCH Throughput (no exporter)")

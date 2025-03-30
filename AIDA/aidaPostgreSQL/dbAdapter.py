@@ -187,12 +187,12 @@ class DBCPostgreSQL(DBC):
 
         (data, rows) = self._executeQry(sql)
 
-        import aidasys;
+        #import aidasys;
 
-        aidasys.memtest = aidasys.memtest + 1 
+        #aidasys.memtest = aidasys.memtest + 1 
 
-        return aidasys.memtest
-        #return data["avg_response_time"][0]
+        #return aidasys.memtest
+        return data["avg_response_time"][0]
 
     def _getThroughput(self):
         sql = \

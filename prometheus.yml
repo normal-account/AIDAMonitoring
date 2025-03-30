@@ -1,7 +1,7 @@
 # Global configuration
 global:
-  scrape_interval: 15s  # How frequently to scrape targets (default: 1m)
-  evaluation_interval: 15s  # How frequently to evaluate rules (default: 1m)
+  scrape_interval: 1s  # How frequently to scrape targets (default: 1m)
+  evaluation_interval: 1s  # How frequently to evaluate rules (default: 1m)
 
 # Scrape configurations
 scrape_configs:

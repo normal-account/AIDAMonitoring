@@ -31,6 +31,7 @@ services:
     #  - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Mount config file
     command:
       - "--no-collector.stat_bgwriter"
+      - "--collector.stat_statements"
     #  - "--config.file=/etc/prometheus/prometheus.yml"  # Tell exporter to use it
     ports:
       - "9187:9187"
