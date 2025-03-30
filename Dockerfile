@@ -95,8 +95,9 @@ COPY AIDA /home/build/AIDA
 COPY AIDA-Benchmarks /home/build/AIDA-Benchmarks
 
 # Install benchbase
-RUN git clone --depth 1 https://github.com/cmu-db/benchbase.git /home/build/benchbase
+RUN git clone https://github.com/cmu-db/benchbase.git /home/build/benchbase
 WORKDIR /home/build/benchbase
+RUN git checkout 46fc66f
 RUN ./mvnw clean package -P postgres
 RUN tar xvzf target/benchbase-postgres.tgz
 
@@ -113,6 +114,6 @@ RUN adduser --quiet --disabled-password --gecos ""  aida-user && chown -R aida-u
     && echo "aida-user:aida" | chpasswd && usermod -aG sudo aida-user 
 RUN chown aida-user -R /home/build
 USER aida-user
-
+RUN echo ". /home/build/postgres/env.sh" >> /home/aida-user/.bashrc
 
 WORKDIR /home/build

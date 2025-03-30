@@ -1,0 +1,16 @@
+# Global configuration
+global:
+  scrape_interval: 1s  # How frequently to scrape targets (default: 1m)
+  evaluation_interval: 1s  # How frequently to evaluate rules (default: 1m)
+
+# Scrape configurations
+scrape_configs:
+  # Scrape Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']  # Prometheus scrape target (Prometheus server itself)
+
+  # Scrape database
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['localhost:9187']  # Target where PostgreSQL Exporter is running

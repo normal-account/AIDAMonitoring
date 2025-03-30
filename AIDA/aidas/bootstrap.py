@@ -7,15 +7,8 @@ from aidacommon.aidaConfig import AConfig;
 from aidacommon import rop;
 import aidas.dmro as dmro;
 import aidas.aidas as aidas;
-
+import aidas.scheduler as scheduler;
 import aidacommon.gbackend as gbackend;
-
-GPU_FUNC = ['_GPU']
-
-def gpu_not_available_error(func_name):
-    def wrapper(dw):
-        raise AssertionError(f'CUDA is not present. CUDA is required for {func_name}')
-    return wrapper
 
 def bootstrap():
 
@@ -67,26 +60,20 @@ def bootstrap():
     # Startup the remote object manager for RMI.
     robjMgr = rop.ROMgr.getROMgr('', AConfig.RMIPORT, True);
     aidasys.robjMgr = robjMgr;
+    
+    schMgr = scheduler.ScheduleManager.getScheduleManager();
+    aidasys.schMgr = schMgr;
 
     # Start the connection manager.
     # Get the module and class name separated out for the database adapter that we need to load.
     dbAdapterModule, dbAdapterClass = os.path.splitext(AConfig.DATABASEADAPTER);
     dbAdapterClass = dbAdapterClass[1:];
-
     dmod = importlib.import_module(dbAdapterModule);
     dadapt = getattr(dmod, dbAdapterClass);
-
-    # substitute all functions that requires GPU to the error function in the dbadapter
-    def sub_gpu_funcs():
-        import torch
-        if not torch.cuda.is_available():
-            for func_name in GPU_FUNC:
-                setattr(dadapt, func_name, gpu_not_available_error(func_name))
-        logging.info('AIDA: Loading database adapter {} for connection manager'.format(dadapt))
-
-    sub_gpu_funcs()
+    logging.info('AIDA: Loading database adapter {} for connection manager'.format(dadapt))
     conMgr = aidas.ConnectionManager.getConnectionManager(dadapt);
     aidasys.conMgr = conMgr;
+
 
     #Visualization
     import builtins;
@@ -95,7 +82,60 @@ def bootstrap():
     builtins.matplotlib = matplotlib;
     import matplotlib.pyplot as plt;
     builtins.plt = plt;
+    import torch
+    builtins.torch = torch;
+    import torch.nn as nn;
+    builtins.nn = nn;
+    from sklearn import datasets;
+    import time;
+    builtins.time = time;
+    builtins.logging = logging;
+    from aidacommon.dbAdapter import DataConversion;
+    import numpy as np;
+    import geopy.distance as geopyd;
+    builtins.geopyd = geopyd;
+    builtins.np = np;
+    import copy
+    builtins.copy = copy
+    import sys;
+    sys.argv = ['']
+    # import tensorflow as tf;
+    import tensorflow.compat.v1 as tf;
+    # tf.disable_v2_behavior()
+    builtins.tf = tf;
 
+    from tensorflow import keras
+    builtins.keras = keras
+    from tensorflow.keras import layers
+    builtins.layers = layers
+    builtins.os = os
+    import pandas as pd
+    builtins.pd = pd
+
+    import requests
+    builtins.requests = requests
+
+    from collections import OrderedDict
+    builtins.OrderedDict = OrderedDict
+
+    from numpy.random import randn
+    builtins.randn = randn
+
+
+
+
+
+    builtins.DataConversion = DataConversion;
+    builtins.datasets = datasets;
+    from torch.autograd import Variable
+    from aida.aida import Q
+    builtins.Q = Q
+    from aidacommon.dborm import CMP,COL,COUNT,C
+    builtins.CMP = CMP
+    builtins.COL = COL
+    builtins.COUNT = COUNT
+    builtins.C = C
+    builtins.Variable = Variable
     gBApp = gbackend.GBackendApp(AConfig.DASHPORT)
     aidasys.gBApp = gBApp;
     gBApp.start();

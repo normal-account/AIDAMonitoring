@@ -5,6 +5,7 @@ import weakref;
 from tblib import pickling_support;
 pickling_support.install();
 import dill as custompickle;
+import traceback
 
 import threading;
 from socketserver import ThreadingTCPServer, StreamRequestHandler;
@@ -39,7 +40,7 @@ class ConnectionManager(metaclass=ABCMeta):
                         "Called by TCPServer for each client connection request"
                         try:
                             (dbname, username, password, jobName) = custompickle.load(self.rfile);
-                            #logging.debug("connection request received {}".format((dbname,username,jobName)));
+                            logging.info("connection request received {}".format((dbname,username,jobName)));
                             #dbc = dborm.dbAdapter.DBCMonetDB(dbname, username, password, jobName, CoMgrObj);
                             dbc = dbadapter(dbname, username, password, jobName, CoMgrObj, self.request.getsockname()[0]);
                             #logging.debug("created dbc for {}, type {}".format((dbname,username,jobName), type(dbc)));
@@ -72,9 +73,7 @@ class ConnectionManager(metaclass=ABCMeta):
                 self.__srvrThread.start();
 
             def get(self, jobName):
-                dba = self.__class__.__DBCRepo[jobName]
-                logging.debug(f'proxy dba obj is {weakref.proxy(dba)}')
-                return weakref.proxy(dba);
+                return self.__class__.__DBCRepo[jobName];
 
             def add(self, jobName, dbc):
                 self.__class__.__DBCRepo[jobName] = dbc;
@@ -97,8 +96,7 @@ class ConnectionManager(metaclass=ABCMeta):
                 #logging.debug("A connection manager does not exist.");
                 cmgr = __ConnectionManager(dbadapter);
                 ConnectionManager.__ConnectionManagerObj = cmgr;
-                #logging.debug("A connection manager is created.");
-
+                logging.info("A connection manager is created.");
             # Return the connection manager object.
             return ConnectionManager.__ConnectionManagerObj;
 

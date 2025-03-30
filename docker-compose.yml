@@ -1,13 +1,13 @@
 version: '1.0'
 
 services:
-  #prometheus:
-  #  image: prom/prometheus
-  #  container_name: prometheus
-  #  volumes:
-  #    - ./prometheus.yml:/etc/prometheus/prometheus.yml
-  #  ports:
-  #    - "9090:9090"
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
 
   postgres:
     build:
@@ -19,21 +19,22 @@ services:
     ports:
       - "5432:5432"
 
-#postgres-exporter:
-#  image: prometheuscommunity/postgres-exporter
-#  container_name: postgres-exporter
-#  network_mode: "host"        
-#  environment:
-#    - DATA_SOURCE_URI=localhost:5432/benchbase?sslmode=disable
-#    - DATA_SOURCE_USER=test01
-#    - DATA_SOURCE_PASS=test01
-#  #volumes:
-#  #  - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Mount config file
-#  command:
-#    - "--no-collector.stat_bgwriter"
-#  #  - "--config.file=/etc/prometheus/prometheus.yml"  # Tell exporter to use it
-#  ports:
-#    - "9187:9187"
-#  depends_on:
-#    - postgres
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres-exporter
+    network_mode: "host"        
+    environment:
+      - DATA_SOURCE_URI=localhost:5432/benchbase?sslmode=disable
+      - DATA_SOURCE_USER=test01
+      - DATA_SOURCE_PASS=test01
+    #volumes:
+    #  - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Mount config file
+    command:
+      - "--no-collector.stat_bgwriter"
+      - "--collector.stat_statements"
+    #  - "--config.file=/etc/prometheus/prometheus.yml"  # Tell exporter to use it
+    ports:
+      - "9187:9187"
+    depends_on:
+      - postgres
 

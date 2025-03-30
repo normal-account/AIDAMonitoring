@@ -7,10 +7,12 @@ AS $$
   import queue;
   requestQueue = queue.Queue();
   resultQueue = queue.Queue();
+  memtest = 500
 
   import aidasys;
   aidasys.requestQueue = requestQueue;
   aidasys.resultQueue = resultQueue;
+  aidasys.memtest = memtest
   conMgr = aidasys.conMgr
   
   while True:
@@ -22,6 +24,31 @@ AS $$
 $$ LANGUAGE plpython3u;
 --SELECT * FROM aidas_bootstrap();
 
+CREATE OR REPLACE FUNCTION aidas_list_cached_modules() 
+  RETURNS TABLE(module_name text)
+AS $$
+  import sys
+  return list(sys.modules.keys())
+$$ LANGUAGE plpython3u;
+--SELECT * FROM  aidas_list_cached_modules();
+
+
+CREATE OR REPLACE FUNCTION aidas_list_cached_modules2() 
+  RETURNS TABLE(module_name text)
+AS $$
+  import sys
+  import aidas.bootstrap;
+  return list(sys.modules.keys())
+$$ LANGUAGE plpython3u;
+--SELECT * FROM  aidas_list_cached_modules();
+
+CREATE OR REPLACE FUNCTION increment_counter()
+RETURNS INTEGER AS $$
+    if 'counter' not in SD:
+        SD['counter'] = 0  # Initialize the counter
+    SD['counter'] += 1  # Increment the counter
+    return SD['counter']
+$$ LANGUAGE plpython3u;
 
 CREATE OR REPLACE FUNCTION aidas_listpyinfo() 
   RETURNS TABLE(name text, val text)
@@ -126,3 +153,5 @@ CREATE OR REPLACE AGGREGATE median(anycompatible) (
   FINALFUNC=_final_median,
   INITCOND='{}'
 );
+
+CREATE EXTENSION pg_stat_statements;

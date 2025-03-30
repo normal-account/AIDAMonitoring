@@ -9,11 +9,10 @@ import collections;
 import logging;
 
 import numpy as np;
-
-try:
-    import cupy as cp;
-except:
-    logging.info("Failed to import cupy.")
+import sys
+#import cupy as cp;
+import time
+import threading
 
 import random;
 from io import BytesIO;
@@ -22,6 +21,7 @@ from PIL import Image;
 from aidacommon.aidaConfig import AConfig;
 from aidacommon.rop import ROMgr;
 from aidacommon.rdborm import *;
+from aidas.scheduler import ScheduleManager as scheduler;
 
 from aidacommon.gbackend import GBackendApp;
 
@@ -38,6 +38,9 @@ from sklearn import datasets
 import sys
 import torch.nn as nn
 import torch.nn.functional as F
+import GPUtil
+
+
 
 # helper class and methods that convert TabularData Object to numpy arrays
 class DataConversion:
@@ -261,8 +264,7 @@ class DecisionTreeModel:
             X=DataConversion.extract_X(X)
         if (isinstance(y,TabularData)):
             y=DataConversion.extract_y(y)
-        return self.model.cost_complexity_pruning_path(X,y,sample_weight)
-
+        return self.model.cost_complexity_pruning_path(X,y,sample_weight)        
     def decision_path(self,X,check_input=True):
         if (isinstance(X,TabularData)):
             X=DataConversion.extract_X(X)
@@ -346,6 +348,8 @@ class DBC(metaclass=ABCMeta):
         self._jobName = jobName;
         self._conMgr.add(jobName, self);
         self._roMgrObj = ROMgr.getROMgr();
+        self._schMgr = scheduler.getScheduleManager();
+        #self._schMgr = aidasys.schMgr;
         self._dbName = dbName;
         self._serverIPAddr = serverIPAddr;
         self._workSpaceProxies_ = {};
@@ -429,21 +433,64 @@ class DBC(metaclass=ABCMeta):
         #Execute the function with this workspace as the argument and return the results if any.
         if(isinstance(func, str)):
             func = super().__getattribute__(func);
-        return func(self, *args, **kwargs);
+        start_time = time.time();
+        pred = func(self, *args, **kwargs);
+        end_time = time.time();
+        rt = end_time - start_time;
+        result = "time: "+ str(rt)+" ; pred: "+ str(pred);
+        return result;
+        #return func(self, *args, **kwargs);
 
-    def _X_torch(self,func,*args,**kwargs):
-        """Function that is called from stub to execute a python function in this workspace"""
+    def _Schedule(self,iter_func,cond_func,test_func,name,*args,**kwargs):
+        """Function that is called from stub to execute a python function in this workspace between cpu and gpu"""
         #Execute the function with this workspace as the argument and return the results if any.
-        if(isinstance(func, str)):
-            func = super().__getattribute__(func);
-        return func(self, *args, **kwargs,nn = sys.modules["torch.nn.modules"],torch = sys.modules["torch"], datasets = sys.modules["sklearn.datasets"], F = sys.modules["torch.nn.functional"]);
+        if(isinstance(iter_func, str)):
+            iter_func = super().__getattribute__(iter_func);
+        if(isinstance(cond_func, str)):
+            cond_func = super().__getattribute__(cond_func);
+        use_gpu = False
+        result = ""
+        start_time = time.time()
 
-    def _X_tensorFlow(self,func,*args,**kwargs):
-        """Function that is called from stub to execute a python function in this workspace"""
-        #Execute the function with this workspace as the argument and return the results if any.
-        if(isinstance(func, str)):
-            func = super().__getattribute__(func);
-        return func(self, *args, **kwargs,tf = sys.modules["tensorflow"],np = sys.modules["numpy"],F = sys.modules["torch.nn.functional"]);
+        #wrap up everything when is assigned to gpu
+        def all_to_gpu():
+            while not cond_func(TensorWrap_GPU(self), *args, **kwargs):
+                result=iter_func(TensorWrap_GPU(self), *args, **kwargs);
+            result = test_func(TensorWrap_GPU(self), *args, **kwargs);
+            return result;
+    
+        
+
+        while not cond_func(self, *args, **kwargs):
+            condition = threading.Condition();
+            with condition:
+                logging.info(condition);
+                self._schMgr.schedule_GPU(condition,name);
+                condition.wait();
+            if(self._schMgr.in_GPU(condition)):
+                use_gpu = True;
+                logging.info(name+ " run on gpu");
+                #result = all_to_gpu();
+                all_to_gpu();
+            else:
+                logging.info(name+ " run on cpu");
+                #result = iter_func(TensorWrap_CPU(self), *args, **kwargs);
+                iter_func(TensorWrap_CPU(self), *args, **kwargs);
+                self._schMgr.finish_CPU(condition,name);
+        
+        #after reach the cond_function, test if the job has been sent to GPU
+        #if so, just inform the scheduler to clearup
+        #if not, execute the test_function in CPU
+        if(not use_gpu):
+            #result = test_func(TensorWrap_CPU(self), *args, **kwargs);
+            test_func(TensorWrap_CPU(self), *args, **kwargs);
+            self._schMgr.cleanup_CPU(name);
+        else:
+            self._schMgr.finish_GPU(condition,name);
+        end_time = time.time()
+        #result = result +name+ " time: " + str(end_time - start_time)
+        result = end_time - start_time
+        return result;
 
     def _XP(self, func, *args, **kwargs):
         """Function that is called from stub to execute a python function in this workspace"""
@@ -460,23 +507,15 @@ class DBC(metaclass=ABCMeta):
         #Wrap the DBC object to make sure that the DBC object returns only CuPy matrix representations of the TabularData objects.
         if(isinstance(func, str)):
             func = super().__getattribute__(func);
+        #func(GPUWrap(self), *args, **kwargs)
+        #torch.cuda.cudart().cudaProfilerStart();
+        #func(GPUWrap(self), *args, **kwargs);
+        #torch.cuda.cudart().cudaProfilerStop()
         return func(GPUWrap(self), *args, **kwargs);
 
     def _helloWorld(self):
         hw=HelloWorld()
-        return hw
-
-    def _extract_X(self, tabularData: TabularData):
-        """
-        extract the numerical features of a tabularData as a numpy array
-        """
-        return DataConversion.extract_X(tabularData)
-
-    def _extract_y(self, tabularData: TabularData):
-        """
-        extract numerical y values of a tabularData as a numpy array
-        """
-        return DataConversion.extract_y(tabularData)
+        return hw        
 
     def _linearRegression(self,*args,**kwargs):
         model=LinearRegressionModel(*args,**kwargs)
@@ -547,27 +586,6 @@ class DBC(metaclass=ABCMeta):
 
         self._executeQry("INSERT INTO _sys_models_ VALUES('{}','{}','{}');".format(model_name,pickled_m,model_type),sqlType=DBC.SQLTYPE.INSERT)
 
-    def _load(self,model_name):
-
-        unpickled_m = self._executeQry("SELECT model FROM _sys_models_ WHERE model_name = '{}';".format(model_name))
-        try:
-            unpickled_m = unpickled_m[0]['model'][0]
-        except:
-            raise Exception("no model with such name found.")
-
-        model=pickle.loads(ast.literal_eval(unpickled_m))
-        logging.info(type(model))
-        # default as linear regression model
-        model_wrapper = LinearRegressionModel()
-
-        if (isinstance(model,sklearn.linear_model.LogisticRegression)):
-            model_wrapper = LogisticRegressionModel()
-        elif (isinstance(model,sklearn.tree.DecisionTreeClassifier)):
-            model_wrapper = DecisionTreeModel()
-
-        model_wrapper.model=model
-        return model_wrapper
-
     def _saveTorchModel(self, model_name, model, update=False):
 
         # Code using MERGE
@@ -607,26 +625,24 @@ class DBC(metaclass=ABCMeta):
                 "There already exists a model in the database with the same model_name. Please set \'update\' to True to overwrite")
             # delete the model saved with <model_name> if update=True
         elif (update == True and duplicate_exist == True):
-            self._executeQry("DELETE FROM _sys_models_ WHERE model_name='{}';".format(model_name),
-                             sqlType=DBC.SQLTYPE.DELETE)
+            self._executeQry("DELETE FROM _sys_models_ WHERE model_name='{}';".format(model_name),sqlType=DBC.SQLTYPE.DELETE)
         else:
             pass
 
         model_type = type(model)
         model_type = str(model_type)
-        model_type = model_type.replace("'", "''")
+        model_type = model_type.replace("'","''")
 
         pickled_m = pickle.dumps(model)
         pickled_m = str(pickled_m)
-        pickled_m = pickled_m.replace("'", "''")
+        pickled_m = pickled_m.replace("'","''")
 
         if AConfig.DATABASEADAPTER == "aidaMonetDB.dbAdapter.DBCMonetDB":
             pickled_m = pickled_m.replace("\\", "\\\\")
         elif AConfig.DATABASEADAPTER == "aidaPostgreSQL.dbAdapter.DBCPostgreSQL":
             pass
 
-        self._executeQry("INSERT INTO _sys_models_ VALUES('{}','{}','{}');".format(model_name, pickled_m, model_type),
-                         sqlType=DBC.SQLTYPE.INSERT)
+        self._executeQry("INSERT INTO _sys_models_ VALUES('{}','{}','{}');".format(model_name, pickled_m, model_type),sqlType=DBC.SQLTYPE.INSERT)
 
     def _loadTorchModel(self,model_name):
 
@@ -636,7 +652,7 @@ class DBC(metaclass=ABCMeta):
         except:
             raise Exception("no model with such name found.")
 
-        model = pickle.loads(ast.literal_eval(unpickled_m))
+        model=pickle.loads(ast.literal_eval(unpickled_m))
         logging.info(type(model))
         # default as linear regression model
         return model
@@ -671,9 +687,6 @@ class DBC(metaclass=ABCMeta):
 
     @abstractmethod
     def _describe(self, tblrData): pass;
-
-    @abstractmethod
-    def _getBufferHitRate(self): pass;
 
     @abstractmethod
     def _agg(self, agfn, tblrData, collist=None, valueOnly=True): pass;
@@ -856,7 +869,7 @@ copyreg.pickle(DBC, DBCRemoteStub.serializeObj);
 ###-###                self._registerProxy_(key, robj.proxyid);
 ###-###                super().__setattr__(key, robj);
 ###-###
-###-###    #TODO: trap __del__ and call _close ?
+###-###  /home/build/AIDA/aidacommon/dbA  #TODO: trap __del__ and call _close ?
 ###-###
 ###-###
 ###-###copyreg.pickle(DBCRemoteStub, DBCRemoteStub.serializeObj);
@@ -983,5 +996,129 @@ class GPUWrap:
             return;
         except :
             logging.exception("GPUWrap : Exception ");
+            pass;
+        setattr(self.__dbcObj__, key, value);
+# This class is very similar to DBCWrap class above except that here we are working tensor->cupy objects instead of NumPy to accelarate the training process.
+# To simplify, only the parts that are different from above have comments beside.
+class TensorWrap_GPU:
+    def __init__(self, dbcObj):
+        self.__dbcObj__ = dbcObj; #This is the DBC workspace object we are wrapping
+        self.__tDataColumns__ = {}; #Keep track of the column metadata of all TabularData variable names that we have seen so far.
+
+    def __getattribute__(self, item):
+        #Trap the calls to ALL my object variables here itself.
+        if (item in ('__dbcObj__', '__tDataColumns__')):
+            return super().__getattribute__(item);
+
+        #Every other variable must come from the DBC object that we are wrapping.
+
+        val = getattr(super().__getattribute__('__dbcObj__'), item);
+        if(isinstance(val, TabularData)): #If the value returned from the DBC object is of type TabularData
+            tDataCols = super().__getattribute__('__tDataColumns__');
+            tDataCols[item] = val.columns; #We will keep track of that variable/objects metadata
+            #Instead of returning the TabularData object, we will return only the NumPy matrix representation.
+            #But since tabular data objects internally stored matrices in transposed format, we will have to transpose it
+            # Back to regular format first.
+            val = val.matrix.T;
+            if(not val.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
+                val = np.copy(val, order='C');
+            if(len(val.shape) == 1):
+                val = val.reshape(len(val), 1, order='C');
+            #logging.debug("DBCWrap, getting : item {}, shape {}".format(item, val.shape));
+        if type(val) is np.ndarray: 
+            val = torch.tensor(val);
+        if hasattr(val, 'to'):
+            val = val.to(torch.device("cuda:0"));
+        return val;
+    def __setattr__(self, key, value):
+        #Trap the calls to ALL my object variables here itself.
+        if (key in ('__dbcObj__', '__tDataColumns__')):
+            return super().__setattr__(key, value);
+
+        #logging.debug("DBCWrap, setting called : item {}, value type {}".format(key, type(value)));
+        #Every other variable is set inside the DBC object that we are wrapping.
+        try:
+            #logging.debug("DBCWrap: setattr : current known tabular data objects : {}".format(self.__tDataColumns__.keys()));
+
+            #Convert numpy matrix back to TabularData object
+            #Transpose the matrix to fit the internal form of TabularData objects.
+            if(isinstance(value,np.ndarray)):
+                value = value.T;
+            if(not value.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
+                value = np.copy(value, order='C');
+            #Build a new TabularData object using virtual transformation.
+            #logging.debug("DBCWrap, setting : item {}, shape {}".format(key, value.shape));
+            if key in self.__tDataColumns__:
+                tDataCols = self.__tDataColumns__[key];
+            #If we got to this line, then it means "key" was a TabularData object.
+            # So we need to build a new TabularData object using the original column metadata.
+                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, cols=tuple(tDataCols.keys()), colmeta=tDataCols, dbc=self.__dbcObj__);
+            else:
+            #If we go to this line, then it means "key" is a new variable.
+            # So we need to build a new TabularData from scratch
+                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, dbc=self.__dbcObj__);
+            setattr(self.__dbcObj__, key, valueDF);
+            return;
+        except :
+            logging.exception("DBCWrap : Exception ");
+            pass;
+        setattr(self.__dbcObj__, key, value);
+# This class is very similar to DBCWrap class above except that here we are working tensor->cupy objects instead of NumPy to accelarate the training process.
+# To simplify, only the parts that are different from above have comments beside.
+class TensorWrap_CPU:
+    def __init__(self, dbcObj):
+        self.__dbcObj__ = dbcObj; #This is the DBC workspace object we are wrapping
+        self.__tDataColumns__ = {}; #Keep track of the column metadata of all TabularData variable names that we have seen so far.
+
+    def __getattribute__(self, item):
+        #Trap the calls to ALL my object variables here itself.
+        if (item in ('__dbcObj__', '__tDataColumns__')):
+            return super().__getattribute__(item);
+
+        #Every other variable must come from the DBC object that we are wrapping.
+
+        val = getattr(super().__getattribute__('__dbcObj__'), item);
+        if(isinstance(val, TabularData)): #If the value returned from the DBC object is of type TabularData
+            tDataCols = super().__getattribute__('__tDataColumns__');
+            tDataCols[item] = val.columns; #We will keep track of that variable/objects metadata
+            #Instead of returning the TabularData object, we will return only the NumPy matrix representation.
+            #But since tabular data objects internally stored matrices in transposed format, we will have to transpose it
+            # Back to regular format first.
+            val = val.matrix.T;
+            if(not val.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
+                val = np.copy(val, order='C');
+            if(len(val.shape) == 1):
+                val = val.reshape(len(val), 1, order='C');
+            #logging.debug("DBCWrap, getting : item {}, shape {}".format(item, val.shape));
+        if type(val) is np.ndarray:
+            val = torch.tensor(val);
+        return val;
+    def __setattr__(self, key, value):
+        #Trap the calls to ALL my object variables here itself.
+        if (key in ('__dbcObj__', '__tDataColumns__')):
+            return super().__setattr__(key, value);
+        try:
+            #logging.debug("DBCWrap: setattr : current known tabular data objects : {}".format(self.__tDataColumns__.keys()));
+
+            #Convert numpy matrix back to TabularData object
+            #Transpose the matrix to fit the internal form of TabularData objects.
+            value = value.T;
+            if(not value.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
+                value = np.copy(value, order='C');
+            #Build a new TabularData object using virtual transformation.
+            #logging.debug("DBCWrap, setting : item {}, shape {}".format(key, value.shape));
+            if key in self.__tDataColumns__:
+                tDataCols = self.__tDataColumns__[key];
+            #If we got to this line, then it means "key" was a TabularData object.
+            # So we need to build a new TabularData object using the original column metadata.
+                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, cols=tuple(tDataCols.keys()), colmeta=tDataCols, dbc=self.__dbcObj__);
+            else:
+            #If we go to this line, then it means "key" is a new variable.
+            # So we need to build a new TabularData from scratch
+                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, dbc=self.__dbcObj__);
+            setattr(self.__dbcObj__, key, valueDF);
+            return;
+        except :
+            logging.exception("DBCWrap : Exception ");
             pass;
         setattr(self.__dbcObj__, key, value);
