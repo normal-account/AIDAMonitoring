@@ -28,8 +28,8 @@ class DBCPostgreSQL(DBC):
     """Database adapter class for PostgreSQL"""
 
     # Map numpy data types to PostgreSQL compatible types.
-    typeConverter = {int: 'integer', np.int16:'smallint', np.int32:'integer', np.int64:'bigint', np.float32:'real'
-    , np.float64:'double precision', object:'text', np.object_:'text', 'bytes':'bytea'
+    typeConverter = {np.int16:'smallint', np.int32:'integer', np.int64:'bigint', np.float32:'real'
+    , np.float64:'double precision', np.object:'text', np.object_:'text', 'bytes':'bytea'
     , 'decimal':'double precision' ,'date':'DATE', 'time':'TIME', 'timestamp':'TIMESTAMP'};
     
     datetimeFormats = {'%Y-%m-%d':'date', '%H:%M:%S':'time', '%Y-%m-%d %H:%M:%S':'timestamp'};
@@ -45,22 +45,13 @@ class DBCPostgreSQL(DBC):
     # Not enough information to find  columnSize
 
     #Query to fetch a table schema in PostgreSQL (does not support other database objects such as views)
-    # __TABLE_METADATA_QRY__ = \
-    #     "SELECT table_schema as schemaName, table_name as tableName, column_name as columnName, data_type as columnType, " \
-    #     "0 as columnSize, ordinal_position as columnPos, is_nullable as columnNullable " \
-    #     "FROM information_schema.columns      " \
-    #     "WHERE table_schema = '{}' AND table_name = '{}' " \
-    #     "ORDER BY schemaName, tableName, columnPos " \
-    #     ";"
-
     __TABLE_METADATA_QRY__ = \
-    "SELECT table_schema as schemaName, table_name as tableName, column_name as columnName, data_type as columnType, " \
-    "0 as columnSize, ordinal_position as columnPos, is_nullable as columnNullable " \
-    "FROM information_schema.columns      " \
-    "WHERE table_name = '{}' " \
-    "ORDER BY schemaName, tableName, columnPos " \
-    ";"
-
+        "SELECT table_schema as schemaName, table_name as tableName, column_name as columnName, data_type as columnType, " \
+        "0 as columnSize, ordinal_position as columnPos, is_nullable as columnNullable " \
+        "FROM information_schema.columns      " \
+        "WHERE table_schema = '{}' AND table_name = '{}' " \
+        "ORDER BY schemaName, tableName, columnPos " \
+        ";"
 
     #Query to fetch a table schema in PostgreSQL (does not support other database objects such as views)
     __COLUMN_METADATA_QRY__ = \
@@ -134,13 +125,12 @@ class DBCPostgreSQL(DBC):
 
     def _getDBTable(self, relName, dbName=None):
         #logging.debug(DBCPostgreSQL.__TABLE_METADATA_QRY__.format( dbName if(dbName) else self.dbName, relName));
-        #sql = DBCPostgreSQL.__TABLE_METADATA_QRY__.format( dbName if(dbName is not None) else self.dbName, relName);
-        sql = DBCPostgreSQL.__TABLE_METADATA_QRY__.format(relName);
+        sql = DBCPostgreSQL.__TABLE_METADATA_QRY__.format( dbName if(dbName is not None) else self.dbName, relName);
         (metaData_, rows) = self._executeQry(sql);
 
         if(rows ==0):
-            logging.error("ERROR! cannot find table {} in {}".format(relName, dbName if(dbName is not None) else self.dbName ));
-            raise KeyError("ERROR! cannot find table {} in {}".format(relName, dbName if(dbName is not None) else self.dbName ));
+            #logging.error("ERROR: cannot find table {} in {}".format(relName, dbName if(dbName is not None) else self.dbName ));
+            raise KeyError("ERROR: cannot find table {} in {}".format(relName, dbName if(dbName is not None) else self.dbName ));
         #logging.debug("execute query returned for table metadata {}".format(metaData_));
         #metaData = _collections.OrderedDict();
         #for column in [ 'schemaname', 'tablename', 'columnname', 'columntype', 'columnsize', 'columnpos', 'columnnullable']:
@@ -166,15 +156,6 @@ class DBCPostgreSQL(DBC):
         result = self._getResult();
         return result;
 
-    def _getBufferHitRate(self):
-        sql = \
-        "SELECT AVG(" \
-        "CASE " \
-            "WHEN blks_hit + blks_read = 0 THEN NULL " \
-            "ELSE (1 - (blks_read::float / (blks_hit + blks_read))) " \
-        "END) * 100 AS buffer_hit_rate FROM pg_stat_database"
-        (data, rows) = self._executeQry(sql)
-        return data["buffer_hit_rate"][0]
 
     def _getResponseTime(self):
         sql = \

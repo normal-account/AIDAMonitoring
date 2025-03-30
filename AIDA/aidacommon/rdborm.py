@@ -286,18 +286,16 @@ class DBCRemoteStub(aidacommon.rop.RObjStub):
         pass
 
     @aidacommon.rop.RObjStub.RemoteMethod()
+    def _Schedule(self,iter_func,cond_func,test_func,*args,**kwargs):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
     def _XP(self, func, *args, **kwargs):
         pass
 
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _GPU(self, func, *args, **kwargs):
         pass
-
-    @aidacommon.rop.RObjStub.RemoteMethod()
-    def _extract_X(self, *args, **kwargs): pass
-
-    @aidacommon.rop.RObjStub.RemoteMethod()
-    def _extract_y(self, *args, **kwargs): pass
 
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _helloWorld(self):
@@ -321,7 +319,7 @@ class DBCRemoteStub(aidacommon.rop.RObjStub):
 
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _load(self,model_name):
-        pass
+        pass 
 
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _getBufferHitRate(self):

@@ -40,8 +40,6 @@ class AIDA(metaclass=ABCMeta):
         #Handsake to let the other side know that we have established the stubs.
         custompickle.dump(None,wf); wf.flush();
 
-        print("Done")
-
         #TODO check ret and throw it as an exception in case of some error.
         return ret;
 
