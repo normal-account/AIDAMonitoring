@@ -298,6 +298,12 @@ class DBCRemoteStub(aidacommon.rop.RObjStub):
         pass
 
     @aidacommon.rop.RObjStub.RemoteMethod()
+    def _extract_X(self, *args, **kwargs): pass
+ 
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _extract_y(self, *args, **kwargs): pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
     def _helloWorld(self):
         pass
 
