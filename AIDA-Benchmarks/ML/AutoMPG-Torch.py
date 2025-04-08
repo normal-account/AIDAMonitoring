@@ -134,7 +134,7 @@ def trainingLoop(dw):
     # In[124]:
 
     criterion = nn.MSELoss()
-    epoch_size = 1000
+    epoch_size = 10000
 
     # In[125]:
 

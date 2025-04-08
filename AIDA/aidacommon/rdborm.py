@@ -2,7 +2,7 @@ import copyreg;
 
 from aidacommon.dborm import *;
 import aidacommon.rop;
-
+from aidas.models import *;
 class TabularDataRemoteStub(aidacommon.rop.RObjStub, TabularData):
 
     @aidacommon.rop.RObjStub.RemoteMethod()
@@ -286,18 +286,41 @@ class DBCRemoteStub(aidacommon.rop.RObjStub):
         pass
 
     @aidacommon.rop.RObjStub.RemoteMethod()
+    def _Schedule(self,iter_func,cond_func,test_func,*args,**kwargs):
+        pass
+    
+    
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _append(self,iter_func,cond_func,test_func,name,*args,**kwargs):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _append_no_iter(self,iter_func,cond_func,test_func,name,*args,**kwargs):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _Preprocess(self, func, dataset, *args, **kwargs):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _KMeans(self, epochs, clusters):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _NN(self, model, forward, criterion, optimizer, epochs,  time_limit, name, *args, **kwargs):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _job(self,iter_func,cond_func,test_func,name,*args,**kwargs):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
     def _XP(self, func, *args, **kwargs):
         pass
 
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _GPU(self, func, *args, **kwargs):
         pass
-
-    @aidacommon.rop.RObjStub.RemoteMethod()
-    def _extract_X(self, *args, **kwargs): pass
-
-    @aidacommon.rop.RObjStub.RemoteMethod()
-    def _extract_y(self, *args, **kwargs): pass
 
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _helloWorld(self):
@@ -321,20 +344,7 @@ class DBCRemoteStub(aidacommon.rop.RObjStub):
 
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _load(self,model_name):
-        pass
-
-
-    @aidacommon.rop.RObjStub.RemoteMethod()
-    def _getBufferHitRate(self):
-        pass
-
-    # @aidacommon.rop.RObjStub.RemoteMethod()
-    # def _saveTorchModel(self, model_name, model, update=False):
-    #     pass
-    #
-    # @aidacommon.rop.RObjStub.RemoteMethod()
-    # def _loadTorchModel(self, model_name):
-    #     pass
+        pass 
 
     @aidacommon.rop.RObjStub.RemoteMethod()
     def _sql(self,sql):

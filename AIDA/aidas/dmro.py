@@ -16,6 +16,11 @@ class DMROrepository(types.ModuleType):
     __usrdmroreps = None;
     (USERDMROREPS) = ('usrdmroreps');
 
+    memtest = 500
+
+    def increment(self):
+        self.memtest = self.memtest + 1
+
     # We definitely need a module name for argument
     def __init__(self, name, *args, **kwargs):
 
@@ -79,8 +84,10 @@ class DMROrepository(types.ModuleType):
                 getattr(value, '__addDMRO__')();
             return;
 
+          super().__setattr__(key, value)
+
           # Raise an exception if the attribute name already exists.
-          raise AttributeError("Error module {} already contains object {}.".format(self ,key));
+          #raise AttributeError("Error module {} already contains object {}.".format(self ,key));
 
 
     def __delattr__(self, item):

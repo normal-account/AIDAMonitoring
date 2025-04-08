@@ -1,0 +1,4 @@
+comment = 'AIDA Hook'
+default_version = '1.0'
+relocatable = true
+module_pathname = '$libdir/aida_hook'

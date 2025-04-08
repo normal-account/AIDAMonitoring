@@ -14,6 +14,7 @@ $POSTGRESQL/bin/psql -d template1 -c "UPDATE pg_language SET lanpltrusted = true
 $POSTGRESQL/bin/psql postgres -c "CREATE DATABASE benchbase;"
 $POSTGRESQL/bin/psql postgres -c "CREATE USER admin WITH ENCRYPTED PASSWORD 'password';"
 $POSTGRESQL/bin/psql postgres -c "GRANT ALL PRIVILEGES ON DATABASE benchbase TO admin;"
+$POSTGRESQL/bin/psql -d benchbase -c "GRANT EXECUTE ON FUNCTION pg_reload_conf() TO admin;"
 $POSTGRESQL/bin/psql -d benchbase -c "ALTER SCHEMA public OWNER TO admin;"
 
 unzip data.zip

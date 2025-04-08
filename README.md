@@ -1,84 +1,117 @@
-### To create the PostgreSQL container:
+# Creating the PostgreSQL container:
 
 The container can be launched using the docker-compose.yml file. Simply run the following command:
 
-`docker compose up -d --build`
+```bash
+docker compose up -d --build
+```
 
 Which will build and run the container (it might take a while).
 
 Then, attach to the container :
 
-`docker container exec -it postgres_aida /bin/bash`
+```bash
+docker container exec -it postgres_aida /bin/bash
+```
 
 
-### Running Benchbase benchmarks
+# Running Benchbase benchmarks
 
-Travel to the benchbase folder :
+Travel to the Benchbase folder :
 
-`cd /home/build/benchbase`
+```bash
+cd /home/build/benchbase
+```
 
 From there, a script is available (`run_benchmark.sh`). Run it to launch a benchmark:
 
-`./run_benchmark.sh <benchmark_name>`
+```bash
+./run_benchmark.sh <benchmark_name>
+```
 
 To display the list of available benchmarks, you can also run the script without arguments.
+
+Note that Benchbase outputs on STDOUT by default, so you may want to redirect the script's output to a file. 
+
 
 Configuration files for each benchmark can be found under `config/postgres`. 
 
 See the benchbase GitHub page for more details: https://github.com/cmu-db/benchbase
 
 
-### Disabling statistics in Postgres
+
+# Disabling statistics in Postgres
 
 Statistics are enabled by defaut. To disable them, first open the Postgres configuration file:
 
-`cd /home/build/postgres/`
-`vim pg_storeddata/postgresql.conf`
+```bash
+cd /home/build/postgres/
+vim pg_storeddata/postgresql.conf
+```
 
 Scroll down to the `STATISTICS` section and disable all options by turning them to `off` or `none`.
 
 Alternatively, you can simply overwrite the default configuration file with the example configuration files copied with this project:
 
-`mv postgresql_stats_on.conf pg_storeddata/postgresql.conf`  # To enable stats (default)
-or
-`mv postgresql_stats_off.conf pg_storeddata/postgresql.conf` # To disable stats
+```bash
+cp postgresql_stats_on.conf pg_storeddata/postgresql.conf  # To enable stats (default)
+# or
+cp postgresql_stats_off.conf pg_storeddata/postgresql.conf # To disable stats
+```
 
 Once the modifications have been made, reload the postgres config:
 
-`psql -U admin -d benchbase`
-`SELECT pg_reload_conf();` # From the psql client
+```sql
+psql -U admin -d benchbase
+SELECT pg_reload_conf();
+```
 
 If you want to restart the Postgres server instead of dynamically reloading the config, you can run the `./start_db.sh` script:
 
-`/home/build/postgres/start_db.sh`
+```bash
+/home/build/postgres/start_db.sh
+```
 
 You can confirm the configuration file has been loaded correctly by displaying the modified configurations via psql:
 
-`psql -U admin -d benchbase`
-`SHOW track_activities`
-`SHOW track_counts`
+```sql
+psql -U admin -d benchbase
+SHOW track_activities;
+SHOW track_counts;
+```
 
 And so on. 
 
 
-### Running AIDA
+
+# Running AIDA
 
 AIDA is not necessary for running benchmarks. You can still set it up for test purposes.
 
 Go to the AIDA Postgres folder:
 
-`cd /home/build/AIDA/aidaPostgreSQL/scripts`
+```bash
+cd /home/build/AIDA/aidaPostgreSQL/scripts
+```
 
 Run the `env.sh` script to set the needed environment variables:
 
-`. env.sh`
+```bash
+. env.sh
+```
 
 Then, run the setup script:
 
-`./setup_postgresql.sh <db> <user>`
+```bash
+./setup_postgresql.sh <db> <user>
+```
 
 And finally run the startup script:
 
-`./startup_postgresql.sh <db> <user>`
+```bash
+./startup_postgresql.sh <db> <user>
+```
 
 If you want to run AIDA benchmarks, you will need to place the `postgres_data.zip` archive at the root of the project directory. It's currently not in the repository because of its large size.  
+
+Make && make install in pg_stat_statements, then add it in `shared_load_libraries` in the pg config.

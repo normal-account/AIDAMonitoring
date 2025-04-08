@@ -7,3 +7,4 @@ Jupyter/
 .zip
 dist
 build
+*.png

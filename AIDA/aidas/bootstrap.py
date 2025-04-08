@@ -7,15 +7,7 @@ from aidacommon.aidaConfig import AConfig;
 from aidacommon import rop;
 import aidas.dmro as dmro;
 import aidas.aidas as aidas;
-
-import aidacommon.gbackend as gbackend;
-
-GPU_FUNC = ['_GPU']
-
-def gpu_not_available_error(func_name):
-    def wrapper(dw):
-        raise AssertionError(f'CUDA is not present. CUDA is required for {func_name}')
-    return wrapper
+import aidas.scheduler as scheduler;
 
 def bootstrap():
 
@@ -36,7 +28,7 @@ def bootstrap():
 ##    AConfig.DATABASEPORT = serverConfig.getint('DATABASEPORT', defaultConfig['DATABASEPORT']);
 ##    AConfig.DATABASEADAPTER = serverConfig.get('DATABASEADAPTER', defaultConfig['DATABASEADAPTER']);
 ##    AConfig.LOGLEVEL = serverConfig.get('LOGLEVEL', defaultConfig['LOGLEVEL']);
-##    AConfig.LOGFILE = serverConfig.get('LOGFILE', defaultConfig['LOGFILE']);
+##    AConfig.LOGFILE = servermy_python_udfConfig.get('LOGFILE', defaultConfig['LOGFILE']);
 ##    AConfig.RMIPORT = serverConfig.getint('RMIPORT', defaultConfig['RMIPORT']);
 ##    AConfig.CONNECTIONMANAGERPORT = serverConfig.getint('CONNECTIONMANAGERPORT', defaultConfig['CONNECTIONMANAGERPORT']);
 ##    udfType = serverConfig.get('UDFTYPE', defaultConfig['UDFTYPE']);
@@ -56,46 +48,32 @@ def bootstrap():
 
     aidacommon.aidaConfig.loadConfig('AIDASERVER');
 
+    logging.info("Connection manager port : " + str(aidacommon.aidaConfig.AConfig.CONNECTIONMANAGERPORT))
+    logging.info("RMI port : " + str(aidacommon.aidaConfig.AConfig.RMIPORT))
+
     # Initialize the DMRO repository.
     try:
         dmro.DMROrepository('aidasys');
-        import aidasys;
     except Exception as e:
         logging.exception(e);
-        raise;
+
+    import aidasys;
 
     # Startup the remote object manager for RMI.
     robjMgr = rop.ROMgr.getROMgr('', AConfig.RMIPORT, True);
     aidasys.robjMgr = robjMgr;
+    
+    schMgr = scheduler.ScheduleManager.getScheduleManager();
+    aidasys.schMgr = schMgr;
 
-    # Start the connection manager.
-    # Get the module and class name separated out for the database adapter that we need to load.
+    # Start the connection manager.    # Get the module and class name separated out for the database adapter that we need to load.
     dbAdapterModule, dbAdapterClass = os.path.splitext(AConfig.DATABASEADAPTER);
     dbAdapterClass = dbAdapterClass[1:];
-
     dmod = importlib.import_module(dbAdapterModule);
     dadapt = getattr(dmod, dbAdapterClass);
-
-    # substitute all functions that requires GPU to the error function in the dbadapter
-    def sub_gpu_funcs():
-        import torch
-        if not torch.cuda.is_available():
-            for func_name in GPU_FUNC:
-                setattr(dadapt, func_name, gpu_not_available_error(func_name))
-        logging.info('AIDA: Loading database adapter {} for connection manager'.format(dadapt))
-
-    sub_gpu_funcs()
+    logging.info('AIDA: Loading database adapter {} for connection manager'.format(dadapt))
     conMgr = aidas.ConnectionManager.getConnectionManager(dadapt);
     aidasys.conMgr = conMgr;
 
-    #Visualization
-    import builtins;
-    import matplotlib;
-    matplotlib.use('Agg');
-    builtins.matplotlib = matplotlib;
-    import matplotlib.pyplot as plt;
-    builtins.plt = plt;
-
-    gBApp = gbackend.GBackendApp(AConfig.DASHPORT)
-    aidasys.gBApp = gBApp;
-    gBApp.start();
+def callback(args):
+    logging.info('AIDA: Callback called.')

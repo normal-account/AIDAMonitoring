@@ -24,6 +24,7 @@ from abc import ABCMeta, abstractmethod;
 from six import  reraise;
 
 from socketserver import ThreadingTCPServer, StreamRequestHandler;
+from aidas.models import biLSTM;
 
 from aidacommon.aidaConfig import AConfig, portMapper;
 
