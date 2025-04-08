@@ -336,6 +336,14 @@ class DBCRemoteStub(aidacommon.rop.RObjStub):
         pass
 
     @aidacommon.rop.RObjStub.RemoteMethod()
+    def _getGPUUsage(self):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
+    def _getCPUUsage(self):
+        pass
+
+    @aidacommon.rop.RObjStub.RemoteMethod()
     def _getThroughput(self):
         pass
 

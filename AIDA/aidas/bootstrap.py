@@ -8,7 +8,6 @@ from aidacommon import rop;
 import aidas.dmro as dmro;
 import aidas.aidas as aidas;
 import aidas.scheduler as scheduler;
-import aidacommon.gbackend as gbackend;
 
 def bootstrap():
 
@@ -67,8 +66,7 @@ def bootstrap():
     schMgr = scheduler.ScheduleManager.getScheduleManager();
     aidasys.schMgr = schMgr;
 
-    # Start the connection manager.
-    # Get the module and class name separated out for the database adapter that we need to load.
+    # Start the connection manager.    # Get the module and class name separated out for the database adapter that we need to load.
     dbAdapterModule, dbAdapterClass = os.path.splitext(AConfig.DATABASEADAPTER);
     dbAdapterClass = dbAdapterClass[1:];
     dmod = importlib.import_module(dbAdapterModule);
@@ -76,18 +74,6 @@ def bootstrap():
     logging.info('AIDA: Loading database adapter {} for connection manager'.format(dadapt))
     conMgr = aidas.ConnectionManager.getConnectionManager(dadapt);
     aidasys.conMgr = conMgr;
-
-    # #Visualization
-    # import builtins;
-    # import matplotlib;
-    # matplotlib.use('Agg');
-    # builtins.matplotlib = matplotlib;
-    # import matplotlib.pyplot as plt;
-    # builtins.plt = plt;
-
-    # gBApp = gbackend.GBackendApp(AConfig.DASHPORT)
-    # aidasys.gBApp = gBApp;
-    # gBApp.start();
 
 def callback(args):
     logging.info('AIDA: Callback called.')

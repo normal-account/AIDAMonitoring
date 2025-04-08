@@ -54,7 +54,7 @@ class ScheduleManager(metaclass=ABCMeta):
                                 cv = self.__GPUQueue.popleft();
                                 deviceID = GPUtil.getFirstAvailable(order = 'last', maxLoad=0.5, maxMemory=0.5, attempts=1)
                                 #incase we have assigned the gpu but the work is not start running
-                                if 1 == deviceID[0] and self.__gpu_free:
+                                if 0 == deviceID[0] and self.__gpu_free:
                                     logging.info("try to invoke gpu");
                                     self.invoke_GPU(cv);
                                 elif(len(self.__CPU_inuse) == 0):
@@ -82,7 +82,8 @@ class ScheduleManager(metaclass=ABCMeta):
                             if(len(self.__GPUQueue)> 0):
                                 deviceID = GPUtil.getFirstAvailable(order = 'last', maxLoad=0.5, maxMemory=0.5, attempts=1)
                                 #incase we have assigned the gpu but the work is not start running
-                                if 1 == deviceID[0] and self.__gpu_free:
+                                logging.info(f"Device ID : {str(deviceID[0])}");
+                                if 0 == deviceID[0] and self.__gpu_free:
                                     self.__gpu_free = False;
                                     cv = self.__GPUQueue.popleft();
                                     self.invoke_GPU(cv);
@@ -93,6 +94,8 @@ class ScheduleManager(metaclass=ABCMeta):
                                 else:
                                     break;
                             elif(len(self.__CPUQueue)> 0):
+                                logging.info(f"Going on cpu....");
+
                                 if(self.__cpu_free):
                                     cv = self.__CPUQueue.popleft();
                                     self.invoke_CPU(cv);

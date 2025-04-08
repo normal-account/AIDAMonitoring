@@ -1,15 +1,19 @@
 from aida.aida import *;
-host = 'tfServer2608'; dbname = 'bixi'; user = 'bixi'; passwd = 'bixi'; jobName = 'torchLinear'; port = 55660;
+host = 'localhost'; dbname = 'bixi'; user = 'bixi'; passwd = 'bixi'; jobName = 'torchLinear'; port = 55660;
 dw = AIDA.connect(host,dbname,user,passwd,jobName,port);
 def trainingLoop(dw,input_size, output_size):
     import time
-    import logging
+    import torch
+    import sklearn
+    from sklearn import datasets
+    import numpy as np
+
     start_time = time.time()
     learningrate = 0.01
-    epoch_size = 1000
-    model = nn.Linear(input_size,output_size)
+    epoch_size = 10000
+    model = torch.nn.Linear(input_size,output_size)
     model = model.cuda()
-    criterion = nn.MSELoss()
+    criterion = torch.nn.MSELoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learningrate)
     X, y = datasets.make_regression(n_samples=800000,n_features=1,noise=20,random_state=1)
     X = torch.from_numpy(X.astype(np.float32))

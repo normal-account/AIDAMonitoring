@@ -23,8 +23,6 @@ from aidacommon.rop import ROMgr;
 from aidacommon.rdborm import *;
 from aidas.scheduler import ScheduleManager as scheduler;
 
-from aidacommon.gbackend import GBackendApp;
-
 import pickle
 import sklearn
 from sklearn.linear_model import LogisticRegression
@@ -39,6 +37,7 @@ import sys
 import torch.nn as nn
 import torch.nn.functional as F
 import GPUtil
+import dis
 
 
 
@@ -375,21 +374,6 @@ class DBC(metaclass=ABCMeta):
     @abstractmethod
     def _executeQry(self, sql, resultFormat, sqlType): pass;
 
-    def _Page(self, func, *args, **kwargs):
-        if(isinstance(func, str)):
-            func = super().__getattribute__(func);
-
-        appObj = GBackendApp.getGBackendAppObj();
-        plotLayout =  func(weakref.proxy(self), appObj.app, *args, **kwargs);
-        plotURL = GBackendApp.genURLPath(self._jobName);
-        self._plotURLRepo_[plotURL] = plotLayout;
-        appObj.addURL(plotURL,self);
-
-        if(AConfig.PAGETUNNEL is None):
-            return 'http://' + self._serverIPAddr + ':' + str(AConfig.DASHPORT) + plotURL;
-        else:
-            return 'https://' + AConfig.PAGETUNNEL + plotURL;
-
     def genDivId(self, id):
         #func = inspect.stack()[1][3];
         #divId =  self._jobName + '-' + func + '-' + id + '-' + hex(abs(hash((self._jobName, func, id, random.random()))));
@@ -400,46 +384,42 @@ class DBC(metaclass=ABCMeta):
     def getDivId(self, id):
         return self._webDivIds[id];
 
-    def _Plot(self, func, *args, **kwargs):
-        """Function that is called from stub to execute a Dash graph plotting python function in this workspace"""
-        #Execute the function with this workspace as the argument and return the results if any.
-        if(isinstance(func, str)):
-            func = super().__getattribute__(func);
+    @abstractmethod
+    def _X(self, func, *args, **kwargs): pass;
 
-        plotData =  func(self, *args, **kwargs);
+    def _extract_X(self, tabularData: TabularData):
+         """
+         extract the numerical features of a tabularData as a numpy array
+         """
+         return DataConversion.extract_X(tabularData)
+ 
+    def _extract_y(self, tabularData: TabularData):
+        """
+        extract numerical y values of a tabularData as a numpy array
+        """
+        return DataConversion.extract_y(tabularData)
 
-        if(isinstance(plotData, dict)):
-            #plotLayout =  GBackendApp.wrapGraph(func(self, *args, **kwargs));
-            plotLayout =  GBackendApp.wrapGraph(plotData);
-            plotURL = GBackendApp.genURLPath(self._jobName);
-            self._plotURLRepo_[plotURL] = plotLayout;
-            GBackendApp.getGBackendAppObj().addURL(plotURL,self);
-
-            if(AConfig.PAGETUNNEL is None):
-                return 'http://' + self._serverIPAddr + ':' + str(AConfig.DASHPORT) + plotURL;
-            else:
-                return 'https://' + AConfig.PAGETUNNEL + plotURL;
-        else:
-            imgData = BytesIO();
-            plotData.savefig(imgData, format='png');
-            return imgData;
-
-    def getPlotLayout(self, plotURL):
-        """Function that is invoked by the GBackendApp to obtain the layout of a plot"""
-        return self._plotURLRepo_[plotURL];
-
-    def _X(self, func, *args, **kwargs):
-        """Function that is called from stub to execute a python function in this workspace"""
-        #Execute the function with this workspace as the argument and return the results if any.
-        if(isinstance(func, str)):
-            func = super().__getattribute__(func);
-        start_time = time.time();
-        pred = func(self, *args, **kwargs);
-        end_time = time.time();
-        rt = end_time - start_time;
-        result = "time: "+ str(rt)+" ; pred: "+ str(pred);
-        return result;
-        #return func(self, *args, **kwargs);
+    def _load(self,model_name):
+ 
+         unpickled_m = self._executeQry("SELECT model FROM _sys_models_ WHERE model_name = '{}';".format(model_name))
+         try:
+             unpickled_m = unpickled_m[0]['model'][0]
+         except:
+             raise Exception("no model with such name found.")
+ 
+         model=pickle.loads(ast.literal_eval(unpickled_m))
+         logging.info(type(model))
+         # default as linear regression model
+         model_wrapper = LinearRegressionModel()
+ 
+         if (isinstance(model,sklearn.linear_model.LogisticRegression)):
+             model_wrapper = LogisticRegressionModel()
+         elif (isinstance(model,sklearn.tree.DecisionTreeClassifier)):
+             model_wrapper = DecisionTreeModel()
+ 
+         model_wrapper.model=model
+         return model_wrapper
+ 
 
     def _Schedule(self,iter_func,cond_func,test_func,name,*args,**kwargs):
         """Function that is called from stub to execute a python function in this workspace between cpu and gpu"""
@@ -695,6 +675,12 @@ class DBC(metaclass=ABCMeta):
     def _getResponseTime(self): pass;
 
     @abstractmethod
+    def _getGPUUsage(self): pass;
+
+    @abstractmethod
+    def _getCPUUsage(self): pass;
+
+    @abstractmethod
     def _getThroughput(self): pass;
 
     @abstractmethod
@@ -720,17 +706,23 @@ class DBC(metaclass=ABCMeta):
             return super().__getattribute__(item);
         except:
             pass;
+
+        return super(self.__class__, self)._getDBTable(item);
+
         #Maybe its a database object.
         #TODO: Need to ensure that databaseworkspace.var = tabularDataObject does not work if var is a valid tablename in db.
-        try:
-            #Check if we already have this table loaded up in the DB workspace.
-            return super(self.__class__, self)._getDBTable(item);
-        except KeyError:
-            #We do not have it, so let us see if the adapter implementation class can load it from the database.
-            tbl = self._getDBTable(item);
-            #Store the table handle for any future use.
-            self._tableRepo_[item] = tbl;
-            return tbl;
+        # try:
+        #     #Check if we already have this table loaded up in the DB workspace.
+        #     logging.info(f"Getting parent db table for {str(item)}")
+        #     return super(self.__class__, self)._getDBTable(item);
+        # except KeyError:
+        #     #We do not have it, so let us see if the adapter implementation class can load it from the database.
+        #     tbl = self._getDBTable(item);
+        #     logging.info(f"Getting self db table for {str(tbl)}")
+
+        #     #Store the table handle for any future use.
+        #     self._tableRepo_[item] = tbl;
+        #     return tbl;
 
     def _setattr_(self, key, value, returnAttr=False):
         """Invoked by the remote DBC to set an attribute in DBC for use in workspace"""
@@ -944,7 +936,7 @@ class DBCWrap:
             setattr(self.__dbcObj__, key, valueDF);
             return;
         except :
-            logging.exception("DBCWrap : Exception ");
+            #logging.exception(f"DBCWrap : Exception ({str(key)}:{str(value)})");
             pass;
         setattr(self.__dbcObj__, key, value);
 
@@ -1007,7 +999,7 @@ class GPUWrap:
 
             return;
         except :
-            logging.exception("GPUWrap : Exception ");
+            #logging.exception("GPUWrap : Exception ");
             pass;
         setattr(self.__dbcObj__, key, value);
 # This class is very similar to DBCWrap class above except that here we are working tensor->cupy objects instead of NumPy to accelarate the training process.
@@ -1072,7 +1064,7 @@ class TensorWrap_GPU:
             setattr(self.__dbcObj__, key, valueDF);
             return;
         except :
-            logging.exception("DBCWrap : Exception ");
+            #logging.exception(f"TensorWrapGPU : Exception ({str(key)}:{str(value)})");
             pass;
         setattr(self.__dbcObj__, key, value);
 # This class is very similar to DBCWrap class above except that here we are working tensor->cupy objects instead of NumPy to accelarate the training process.
@@ -1131,6 +1123,6 @@ class TensorWrap_CPU:
             setattr(self.__dbcObj__, key, valueDF);
             return;
         except :
-            logging.exception("DBCWrap : Exception ");
+            #logging.exception(f"TensorWrapCPU : Exception ({str(key)}:{str(value)})");
             pass;
         setattr(self.__dbcObj__, key, value);

@@ -18,6 +18,13 @@ services:
     network_mode: "host"        
     ports:
       - "5432:5432"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter

@@ -5,5 +5,5 @@ then
   exit 1
 fi
 
-pg_ctl stop -D $PGDATADIR
+pg_ctl stop -D $PGDATADIR -m immediate
 pg_ctl start -D $PGDATADIR -l $PGLOGDIR/postgres.log -o -i

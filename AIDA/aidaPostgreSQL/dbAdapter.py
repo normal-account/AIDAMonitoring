@@ -17,7 +17,14 @@ from aidacommon.dbAdapter import *;
 from aidas.rdborm import *;
 from aidas.dborm import DBTable, DataFrame;
 
-from time import time;
+import torch
+import torch.nn as nn  # This is required for `nn.Linear` and `nn.MSELoss`
+import torch.optim as optim
+
+import sklearn
+from sklearn import datasets
+
+import time
 import decimal;
 from convert import convert;
 import vtlib
@@ -151,6 +158,19 @@ class DBCPostgreSQL(DBC):
         d = DBTable(self, metaData_);
         return d;
 
+    def _X(self, func, *args, **kwargs):
+        """Function that is called from stub to execute a python function in this workspace"""
+        #Execute the function with this workspace as the argument and return the results if any.
+        if(isinstance(func, str)):
+            func = super().__getattribute__(func);
+        
+        start_time = time.time();
+        pred = func(self, *args, **kwargs);
+        end_time = time.time();
+        rt = end_time - start_time;
+        result = "time: "+ str(rt)+" ; pred: "+ str(pred);
+        return result;
+
     def _getResult(self):
         result = self.__resultQueue.get();
         self.__resultQueue.task_done();
@@ -187,12 +207,15 @@ class DBCPostgreSQL(DBC):
 
         (data, rows) = self._executeQry(sql)
 
-        #import aidasys;
-
-        #aidasys.memtest = aidasys.memtest + 1 
-
-        #return aidasys.memtest
         return data["avg_response_time"][0]
+
+    def _getCPUUsage(self):
+
+        return 0
+
+    def _getGPUUsage(self):
+        
+        return 0
 
     def _getThroughput(self):
         sql = \
@@ -213,7 +236,7 @@ class DBCPostgreSQL(DBC):
     def _execution(self, sql, resultFormat='column', sqlType=DBC.SQLTYPE.SELECT):
         """Execute a query and return results"""
         #TODO: either support row format results or throw an exception for not supported.
-        logging.info("_execution called for {} with {}".format(self._jobName, sql));
+        #logging.info("_execution called for {} with {}".format(self._jobName, sql));
         with self.__qryLock__:
             try:
                 # Naive conversion approach

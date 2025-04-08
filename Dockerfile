@@ -65,6 +65,9 @@ RUN pip3 install tblib                                           \
   && pip3 install dash dash-core-components dash-html-components flask-cors \
   && pip3 install pickleshare              
 
+
+# tensorflow 2.18.0 requires numpy<2.1.0,>=1.26.0, but you have numpy 1.24.4 which is incompatible.
+
 RUN pip3 install torch torchvision torchaudio        \
   && pip3 install tensorflow && pip3 install cupy-cuda12x
 
@@ -94,6 +97,8 @@ RUN make && make install
 COPY AIDA /home/build/AIDA
 COPY AIDA-Benchmarks /home/build/AIDA-Benchmarks
 
+# Gputil timeloop
+
 # Install benchbase
 RUN git clone https://github.com/cmu-db/benchbase.git /home/build/benchbase
 WORKDIR /home/build/benchbase
@@ -107,6 +112,7 @@ COPY scripts/benchbase/* /home/build/benchbase/
 COPY scripts/postgres/* /home/build/postgres/
 RUN ln -s /home/build/postgres/env.sh /home/build/AIDA/aidaPostgreSQL/scripts/env.sh # Symbolic link for the env script
 # The * makes it optional, since postgres-data.zip is not in the repo by default
+run echo test
 COPY postgres-data.zip* /home/build/postgres/data.zip
 
 # Setup user
@@ -114,6 +120,11 @@ RUN adduser --quiet --disabled-password --gecos ""  aida-user && chown -R aida-u
     && echo "aida-user:aida" | chpasswd && usermod -aG sudo aida-user 
 RUN chown aida-user -R /home/build
 USER aida-user
+
+# Run the env var script
 RUN echo ". /home/build/postgres/env.sh" >> /home/aida-user/.bashrc
+
+# Needed so that CUDA correctly detects our GPU (default is 1,0)
+RUN echo "export CUDA_VISIBLE_DEVICES=0" >> /home/aida-user/.bashrc 
 
 WORKDIR /home/build

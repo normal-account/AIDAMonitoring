@@ -54,6 +54,7 @@ dw = AIDA.connect(host,dbname,user,passwd,jobName,port)
 
 print( dw._getResponseTime() )
 
+exit(0)
 x = []
 y_response = []
 y_throughput = []

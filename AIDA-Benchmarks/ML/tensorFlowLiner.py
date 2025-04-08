@@ -5,7 +5,9 @@ dw = AIDA.connect(host,dbname,user,passwd,jobName,port);
 def trainingLoop(dw):
     import numpy as np
     import tensorflow.compat.v1 as tf
+    import logging
     tf.disable_v2_behavior()
+
 
     rng = np.random
     learningrate = 0.01
@@ -22,9 +24,12 @@ def trainingLoop(dw):
     b = tf.Variable(rng.randn(),name="Bias")
     pred = tf.add(tf.multiply(X,W),b)
     error = tf.reduce_sum(tf.pow(pred-Y,2))/(2*n_samples)
+
     optimizer = tf.train.GradientDescentOptimizer(learningrate).minimize(error)
     init = tf.global_variables_initializer()
     display_step = 50
+
+    logging.info("HERE")
 
     with tf.Session() as sess:
 
@@ -33,18 +38,23 @@ def trainingLoop(dw):
 
         # Fit all training data
         for epoch in range(epoch_size):
-            for (x, y) in zip(train_X, train_Y):
-                sess.run(optimizer, feed_dict={X: x, Y: y})
+            logging.info("HERE2")
+            try:
+                for (x, y) in zip(train_X, train_Y):
+                    sess.run(optimizer, feed_dict={X: x, Y: y})
+            except Exception as e:
+                logging.info(f"EXCEPTION : {str(e)}")
+                return
 
             # Display logs per epoch step
             if (epoch + 1) % display_step == 0:
                 c = sess.run(error, feed_dict={X: train_X, Y: train_Y})
-                print("Epoch:", '%04d' % (epoch + 1), "error=", "{:.9f}".format(c), \
+                logging.info("Epoch:", '%04d' % (epoch + 1), "error=", "{:.9f}".format(c), \
                       "W=", sess.run(W), "b=", sess.run(b))
 
-        print("Optimization Finished!")
+        logging.info("Optimization Finished!")
         training_error = sess.run(error, feed_dict={X: train_X, Y: train_Y})
-        print("Training error=", training_error, "W=", sess.run(W), "b=", sess.run(b), '\n')
+        logging.info("Training error=", training_error, "W=", sess.run(W), "b=", sess.run(b), '\n')
 
 
 dw._X(trainingLoop)
