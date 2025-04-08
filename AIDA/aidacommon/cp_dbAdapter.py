@@ -12,12 +12,12 @@ import numpy as np;
 import sys
 #import cupy as cp;
 import time
-
 import GPUtil
 import psutil
 import threading
 import multiprocessing
 from multiprocessing import Process
+
 
 import random;
 from io import BytesIO;
@@ -28,8 +28,7 @@ from aidacommon.rop import ROMgr;
 from aidacommon.rdborm import *;
 from aidas.scheduler import ScheduleManager as scheduler;
 
-from aidas.models import *;
-
+from aidacommon.gbackend import GBackendApp;
 
 import pickle
 import sklearn
@@ -44,6 +43,8 @@ from sklearn import datasets
 import sys
 import torch.nn as nn
 import torch.nn.functional as F
+import GPUtil
+
 
 
 # helper class and methods that convert TabularData Object to numpy arrays
@@ -379,6 +380,21 @@ class DBC(metaclass=ABCMeta):
     @abstractmethod
     def _executeQry(self, sql, resultFormat, sqlType): pass;
 
+    def _Page(self, func, *args, **kwargs):
+        if(isinstance(func, str)):
+            func = super().__getattribute__(func);
+
+        appObj = GBackendApp.getGBackendAppObj();
+        plotLayout =  func(weakref.proxy(self), appObj.app, *args, **kwargs);
+        plotURL = GBackendApp.genURLPath(self._jobName);
+        self._plotURLRepo_[plotURL] = plotLayout;
+        appObj.addURL(plotURL,self);
+
+        if(AConfig.PAGETUNNEL is None):
+            return 'http://' + self._serverIPAddr + ':' + str(AConfig.DASHPORT) + plotURL;
+        else:
+            return 'https://' + AConfig.PAGETUNNEL + plotURL;
+
     def genDivId(self, id):
         #func = inspect.stack()[1][3];
         #divId =  self._jobName + '-' + func + '-' + id + '-' + hex(abs(hash((self._jobName, func, id, random.random()))));
@@ -389,42 +405,49 @@ class DBC(metaclass=ABCMeta):
     def getDivId(self, id):
         return self._webDivIds[id];
 
-    @abstractmethod
-    def _X(self, func, *args, **kwargs): pass;
+    def _Plot(self, func, *args, **kwargs):
+        """Function that is called from stub to execute a Dash graph plotting python function in this workspace"""
+        #Execute the function with this workspace as the argument and return the results if any.
+        if(isinstance(func, str)):
+            func = super().__getattribute__(func);
 
-    def _extract_X(self, tabularData: TabularData):
-         """
-         extract the numerical features of a tabularData as a numpy array
-         """
-         return DataConversion.extract_X(tabularData)
- 
-    def _extract_y(self, tabularData: TabularData):
-        """
-        extract numerical y values of a tabularData as a numpy array
-        """
-        return DataConversion.extract_y(tabularData)
+        plotData =  func(self, *args, **kwargs);
 
-    def _load(self,model_name):
- 
-         unpickled_m = self._executeQry("SELECT model FROM _sys_models_ WHERE model_name = '{}';".format(model_name))
-         try:
-             unpickled_m = unpickled_m[0]['model'][0]
-         except:
-             raise Exception("no model with such name found.")
- 
-         model=pickle.loads(ast.literal_eval(unpickled_m))
-         logging.info(type(model))
-         # default as linear regression model
-         model_wrapper = LinearRegressionModel()
- 
-         if (isinstance(model,sklearn.linear_model.LogisticRegression)):
-             model_wrapper = LogisticRegressionModel()
-         elif (isinstance(model,sklearn.tree.DecisionTreeClassifier)):
-             model_wrapper = DecisionTreeModel()
- 
-         model_wrapper.model=model
-         return model_wrapper
- 
+        if(isinstance(plotData, dict)):
+            #plotLayout =  GBackendApp.wrapGraph(func(self, *args, **kwargs));
+            plotLayout =  GBackendApp.wrapGraph(plotData);
+            plotURL = GBackendApp.genURLPath(self._jobName);
+            self._plotURLRepo_[plotURL] = plotLayout;
+            GBackendApp.getGBackendAppObj().addURL(plotURL,self);
+
+            if(AConfig.PAGETUNNEL is None):
+                return 'http://' + self._serverIPAddr + ':' + str(AConfig.DASHPORT) + plotURL;
+            else:
+                return 'https://' + AConfig.PAGETUNNEL + plotURL;
+        else:
+            imgData = BytesIO();
+            plotData.savefig(imgData, format='png');
+            return imgData;
+
+    def getPlotLayout(self, plotURL):
+        """Function that is invoked by the GBackendApp to obtain the layout of a plot"""
+        return self._plotURLRepo_[plotURL];
+
+    def _X(self, func, *args, **kwargs):
+        """Function that is called from stub to execute a python function in this workspace"""
+        #Execute the function with this workspace as the argument and return the results if any.
+        if(isinstance(func, str)):
+            func = super().__getattribute__(func);
+        start_time = time.time();
+        p = Process(target = func, args = (self,))
+        p.start();
+        p.join();
+        #pred = func(self, *args, **kwargs);
+        end_time = time.time();
+        rt = end_time - start_time;
+        result = "time: "+ str(rt)
+        return result;
+        #return func(self, *args, **kwargs);
 
     def _Schedule(self,iter_func,cond_func,test_func,name,*args,**kwargs):
         """Function that is called from stub to execute a python function in this workspace between cpu and gpu"""
@@ -472,28 +495,10 @@ class DBC(metaclass=ABCMeta):
             self._schMgr.cleanup_CPU(name);
         else:
             self._schMgr.finish_GPU(condition,name);
-        
         end_time = time.time()
         #result = result +name+ " time: " + str(end_time - start_time)
         result = end_time - start_time
         return result;
-
-    def getPlotLayout(self, plotURL):
-        """Function that is invoked by the GBackendApp to obtain the layout of a plot"""
-        return self._plotURLRepo_[plotURL];
-
-    def _X(self, func, *args, **kwargs):
-        """Function that is called from stub to execute a python function in this workspace"""
-        #Execute the function with this workspace as the argument and return the results if any.
-        if(isinstance(func, str)):
-            func = super().__getattribute__(func);
-        start_time = time.time();
-        pred = func(TensorWrap_CPU(self), *args, **kwargs);
-        end_time = time.time();
-        rt = end_time - start_time;
-        result = "time: "+ str(rt)
-        return result;
-        #return func(self, *args, **kwargs);
 
     def _append(self,iter_func,cond_func,test_func,name,*args,**kwargs):
         """Function that is called from stub to execute a python function in this workspace between cpu and gpu"""
@@ -505,308 +510,68 @@ class DBC(metaclass=ABCMeta):
         use_gpu = False
         time_limit = 5
         first_round = True
-        self.stop = False
         start_t = time.time();
 
         condition = threading.Condition();
         with condition:
             logging.info(condition);
-            self._schMgr.append_GPU(condition,name,self);
+            self._schMgr.append_CPU(condition,name,self);
             condition.wait();
 
         st = time.time()
-        logging.info(name+"start running at"+str(st))
-        iter_func(TensorWrap_GPU(self),self.epoch_total,float('inf'),True, *args, **kwargs);
-        test_func(TensorWrap_GPU(self),True, *args, **kwargs);
+        iter_func(TensorWrap_CPU(self),self.epoch_total,float('inf'), *args, **kwargs);
+        test_func(TensorWrap_CPU(self), *args, **kwargs);
         en = time.time()
-        self._schMgr.finish_GPU_all(self)
+        self._schMgr.finish_CPU(self,name)
         end_t = time.time();
 
-        logging.info(name+"end running at"+str(end_t))
-        #return ed_tnd_t - st;
-        return end_t - start_t;
-
-    def _append_no_iter(self,iter_func,cond_func,test_func,name,*args,**kwargs):
-        """Function that is called from stub to execute a python function in this workspace between cpu and gpu"""
-        #Execute the function with this workspace as the argument and return the results if any.
-        if(isinstance(iter_func, str)):
-            iter_func = super().__getattribute__(iter_func);
-        if(isinstance(cond_func, str)):
-            cond_func = super().__getattribute__(cond_func);
-        use_gpu = False
-        time_limit = 5
-        first_round = True
-        self.stop = False
-        start_t = time.time();
-
-        condition = threading.Condition();
-        with condition:
-            logging.info(condition);
-            self._schMgr.append_GPU(condition,name,self);
-            condition.wait();
-
-        st = time.time()
-        logging.info(name+"start running at"+str(st))
-        while(not(cond_func(TensorWrap_GPU(self),True, *args, **kwargs))):
-            iter_func(TensorWrap_GPU(self),1000000,5,True, *args, **kwargs);
-        test_func(TensorWrap_GPU(self),True, *args, **kwargs);
-        en = time.time()
-        self._schMgr.finish_GPU_all(self)
-        end_t = time.time();
-
-        logging.info(name+"end running at"+str(end_t))
-        return end_t - start_t;
-
-    def _Preprocess(self, func, dataset, *args, **kwargs):
-        if(isinstance(func, str)):
-            func = super().__getattribute__(func);
-        self.dataset = dataset
-        start_time = time.time();
-        #self.x_train, self.y_train, self.x_test, self.y_test = None, None, None, None
-        processed_data  = func(self, dataset, *args, **kwargs);
-
-        # Record processed dataset in dw instance.
-
-        end_time = time.time();
-        rt = end_time - start_time;
-        result = "time: "+ str(rt)
-        #return result;
-        return processed_data;
-
-    def _KMeans(self, epochs, clusters):
-        self.epoch_total = epochs
-        self.K = clusters
-        self.cl, self.c = 0,0
-        self.epoch_done = 0
-        def k_means(dw, time_limit, x, c=0, cl=0,  K=10, Niter=10, verbose=False, if_gpu=True):
-            start = time.time()
-            N, D = x.shape  # Number of samples, dimension of the ambient space
-            num_finish = -1
-
-            if isinstance(c, int) and c == 0:
-                c = x[:K, :].clone()  # Simplistic initialization for the centroids
-                logging.info(' x size'+str(x.size()))
-                logging.info('c size'+str(c.size()))
-                logging.info('K is'+str(K))
-            elif c.size()[1] != 2:
-                c = torch.transpose(c,0,1)
-            if if_gpu:
-                x_i = LazyTensor(x.view(N, 1, D))  # (N, 1, D) samples
-                logging.info('size'+str(c.size()))
-                c_j = LazyTensor(c.view(1, K, D))  # (1, K, D) centroids
-            else:
-                x_i = x.view(N, 1, D)  # (N, 1, D) samples
-                c_j = c.view(1, K, D)  # (1, K, D) centroids
-
-            # K-means loop:
-            # - x  is the (N, D) point cloud,
-            # - cl is the (N,) vector of class labels
-            # - c  is the (K, D) cloud of cluster centroids
-            for i in range(Niter):
-
-                if(time.time() - start < time_limit):
-                    # E step: assign points to the closest cluster -------------------------
-                    D_ij = ((x_i - c_j) ** 2).sum(-1)  # (N, K) symbolic squared distances
-                    cl = D_ij.argmin(dim=1).long().view(-1)  # Points -> Nearest cluster
-                    #logging.info("cl"+str(cl))
-
-                    # M step: update the centroids to the normalized cluster average: ------
-                    # Compute the sum of points per cluster:
-                    c.zero_()
-                    c.scatter_add_(0, cl[:, None].repeat(1, D), x)
-
-                    # Divide by the number of points per cluster:
-                    Ncl = torch.bincount(cl, minlength=K).type_as(c).view(K,1)
-                    c /= Ncl  # in-place division to compute the average
-                else:
-                    num_finish = i;
-                    break;
-                if(dw.stop):
-                    num_finish = i;
-                    break;
-            if(num_finish == -1):
-                num_finish = Niter;
-
-            return cl, c,num_finish
-
-        def trainingLoop(dw,iter_num,time_limit,using_GPU):
-            start = time.time()
-            if(dw.reschedule):
-                gpus = GPUtil.getGPUs()
-                return [(time.time() - start),num_finish,gpus[1].load*100,psutil.cpu_percent()]
-            cl = dw.cl
-            c = dw.c
-            print(c)
-            K = dw.K
-            x = dw.x
-            Niter = iter_num
-            cl, c,num_finish = k_means(dw,time_limit,x, c, cl, K, Niter=Niter, if_gpu = using_GPU)
-            dw.cl = cl
-            dw.c = c
-            end = time.time()
-            #dw.timeArray.append(end-start)
-            dw.epoch_done += num_finish
-            #dw.finishedEpochArray.append(dw.epoch_done)
-            gpus = GPUtil.getGPUs()
-            return [(time.time() - start),num_finish,gpus[1].load*100,psutil.cpu_percent()]
-
-        def Condition(dw,use_GPU):
-            if dw.epoch_done >= dw.epoch_total:
-                return True
-            else:
-                return False
-
-        def Testing(dw,using_GPU):
-            pass
-        return self._job(trainingLoop, Condition, Testing, "kmeans")
-
-    def _NN(self, model, forward, criterion, optimizer, epochs, name, loss_limit=None, *args, **kwargs):
-        self.epoch_done = 0
-        self.loss_limit = loss_limit
-        if(epochs != None):
-            self.epoch_total = epochs
-        self.model = model
-        self.criterion = criterion
-        self.optimizer = optimizer
-        #self.epochs = epochs
-        self.stop = False
-        self.loss = 100000000000000
-        self.loss_arr = []
-        model.forward = MethodType(forward, model)
-        def iterate(dw,iter_num,time_limit,using_GPU):
-            psutil.cpu_percent()
-            model = dw.model
-            #optimizer = torch.optim.RMSprop(model.parameters(), lr=0.001)
-            optimizer = dw.optimizer
-            x_train = dw.x_train
-            y_train  = dw.y_train
-            criterion = dw.criterion
-            start = time.time()
-            num_finish = 0;
-
-            if(dw.reschedule):
-                gpus = GPUtil.getGPUs()
-                return [(time.time() - start),num_finish,gpus[1].load*100,psutil.cpu_percent()]
-            for i in range (iter_num):
-                if(time.time() - start < time_limit):
-                    model = self.model
-                    predicted = model(x_train)
-                    loss = criterion(predicted, y_train)
-                    self.loss = loss.item()
-                    self.loss_arr.append(self.loss)
-                    if self.loss_limit != None and self.loss <= self.loss_limit:
-                        dw.stop = True
-                    else:
-                        loss.backward()
-                        optimizer.step()
-                        optimizer.zero_grad()
-                        self.model = model
-
-                else:
-                    num_finish = i;
-                    break;
-                if(dw.stop):
-                    num_finish = i;
-                    logging.info("stopped")
-                    break;
-
-            if(num_finish == 0):
-                num_finish = iter_num;
-            dw.model = model
-            epoch_done = dw.epoch_done + num_finish
-            dw.epoch_done = epoch_done
-            gpus = GPUtil.getGPUs()
-            return [(time.time() - start),num_finish,gpus[1].load*100,float(psutil.cpu_percent())]
-
-        def condition(dw, using_GPU):
-            dw.testFunc = 1
-            logging.info("testFunc: " + str(dw.testFunc))
-            if dw.loss_limit == None:
-                if dw.epoch_done >= dw.epoch_total:
-                    return True
-                else:
-                    return False
-
-            else:
-                if dw.loss <= dw.loss_limit:
-                    return True
-                else:
-                    return False
-
-        def test_model(dw, using_GPU):
-
-           #if self.x_test == None or self.y_test == None:
-               #return "No x_test or y_test provided"
-            x_test = dw.x_test
-            y_test = dw.y_test
-            predicted = dw.model(x_test)
-            loss = dw.criterion(predicted,y_test)
-            return_mesg = ""
-            return return_mesg
-
-        return self._job(iterate, condition, test_model, name)
+        #return end_t - start_t;
+        return en - st;
 
 
     def _job(self,iter_func,cond_func,test_func,name,*args,**kwargs):
         """Function that is called from stub to execute a python function in this workspace between cpu and gpu"""
         #Execute the function with this workspace as the argument and return the results if any.
-        logging.info(name+" arrive at "+str(time.time()))
         if(isinstance(iter_func, str)):
             iter_func = super().__getattribute__(iter_func);
         if(isinstance(cond_func, str)):
             cond_func = super().__getattribute__(cond_func);
         use_gpu = False
+        time_limit = 1
         first_round = True
         condition = threading.Condition();
-        self.stop = False
-        self.reschedule = False
-        LARGE_NUM =  10000000000 
-        time_stamp = time.time()
-        epoch_total = LARGE_NUM # a random large int
-        try:
-            epoch_total =self.epoch_total
-        except:
-            logging.info("no explicit epoch num")
+
         start_t = time.time();
 
         logging.info("enter job")
         self._schMgr.coming_test_gpu();
         gpus = GPUtil.getGPUs()
-        wait_gpu_start = time.time()
-        while(gpus[1].load * 100 > 20 or psutil.cpu_percent(interval=0.5)>20):
+        while(gpus[0].load * 100 > 20):
             time.sleep(1)
-            self._schMgr.coming_test_gpu();
-            gpus = GPUtil.getGPUs()
-        wait_gpu_end = time.time()
-        #logging.info("time for waiting gpu test:" + str( wait_gpu_end- wait_gpu_start))
-        #time_limit = 1
-        time_limit = self._schMgr.get_GPU_running_job_length()/10
-        if(time_limit < 1 ):
-            time_limit = 1
-        start_gpu = time.time()
-        logging.info("test start at:"+ str(start_gpu))
-        GPU_test=iter_func(TensorWrap_GPU(self),epoch_total,time_limit,True, *args, **kwargs);
-        logging.info("gpu util:"+str(GPU_test))
-        en_gpu = time.time()
-        #logging.info("time for gpu test:" + str(en_gpu-start_gpu));
-        percent_finished = float(GPU_test[1]/epoch_total);
-        CPU_test = [-1,-1,-1,-1] 
+        GPU_test=iter_func(TensorWrap_GPU(self),self.epoch_total,time_limit,True, *args, **kwargs);
+        logging.info(GPU_test)
+        en1 = time.time()
+        logging.info("time for gpu test:" + str(en1-start_t));
+        percent_finished = float(GPU_test[1]/self.epoch_total);
+        logging.info("percent:" + str(percent_finished))
         #if the job is short enough to be done in the time_limit on GPU
-        if(percent_finished == 1 or cond_func(TensorWrap_GPU(self),True, *args, **kwargs)):
-            result = test_func(TensorWrap_GPU(self),True, *args, **kwargs);
+        if(percent_finished == 1 or cond_func(self, *args, **kwargs)):
+            logging.info("here1")
+            result = test_func(TensorWrap_GPU(self), *args, **kwargs);
             self._schMgr.finish_test_gpu();
             end_t = time.time();
             return end_t-start_t;
         #if the job is relatively short, meaning time_limit has finished large part of it, say 40%,
         #put it directly to GPU queue with estimate time
-        elif(epoch_total != LARGE_NUM and self.epoch_total > 0 and percent_finished > 0.3):
+        elif(self.epoch_total > 0 and percent_finished > 0.3):
+            logging.info("here2")
             self._schMgr.finish_test_gpu();
-            estimate_time = GPU_test[0] *(self.epoch_total - self.epoch_done)/GPU_test[1];
-            #logging.info(name+" wait for schedule(most part) "+str(time.time()))
+            estimate_time = GPU_test[0] * self.epoch_total/GPU_test[1];
             with condition:
-                self._schMgr.insert_GPU(condition,name,self,estimate_time,GPU_test[2],GPU_test[3],time_stamp);
+                self._schMgr.insert_GPU(condition,name,self,estimate_time);
                 condition.wait();
         else:
+            self._schMgr.finish_test_gpu();
             logging.info("test on cpu")
             #need to do the CPU test
             self._schMgr.coming_test_cpu();
@@ -814,146 +579,58 @@ class DBC(metaclass=ABCMeta):
             time.sleep(0.2)
             per = psutil.cpu_percent()
             #when current job is not stopped, keep waiting until no one is using cpu
-            while(per > 20):
-                #logging.info("cpu:" + str(per))
-                #logging.info("wait for starting test on cpu")
-                time.sleep(1)
-                self._schMgr.coming_test_cpu();
-                per = psutil.cpu_percent()
             st2 = time.time()
-            time_limit = 1
-            #time_limit = self._schMgr.get_CPU_running_job_length()/10
-            #if(time_limit < 1):
-            #    time_limit = 1
-            CPU_test=iter_func(TensorWrap_CPU(self),epoch_total,time_limit,False,*args, **kwargs);
-            logging.info("cpu util:"+str(CPU_test))
+            while(per > 20):
+                logging.info("cpu:" + str(per))
+                logging.info("wait for starting test on cpu")
+                time.sleep(1)
+                per = psutil.cpu_percent()
+            CPU_test=iter_func(TensorWrap_CPU(self),self.epoch_total,time_limit,False,*args, **kwargs);
+            logging.info(CPU_test)
             en2 = time.time()
-            #logging.info("time for cpu test:" + str(en2-st2));
-            #logging.info("time till cpu test:" + str(en2-start_t));
-            if(epoch_total != LARGE_NUM):
-                #known total epoches
-                estimate_time_GPU = GPU_test[0] *(self.epoch_total - self.epoch_done)/GPU_test[1];
-                estimate_time_CPU = CPU_test[0] * (self.epoch_total - self.epoch_done)/CPU_test[1];
-                exec_on_CPU_time = self._schMgr.get_CPU_waiting(estimate_time_CPU);
-                exec_on_GPU_time = self._schMgr.get_GPU_waiting(estimate_time_GPU);
-                logging.info("cpu"+ str(CPU_test[0] *self.epoch_total/CPU_test[1]))
-                logging.info("gpu"+ str(GPU_test[0] *self.epoch_total/GPU_test[1]))
-                if(float(exec_on_GPU_time/exec_on_CPU_time) > 1):
-                    logging.info("need to go cpu queue")
-                    self._schMgr.insert_CPU(condition,name,self,estimate_time_CPU,CPU_test[2],CPU_test[3],time_stamp);
-                else:
-                    logging.info("need to go gpu queue")
-                    self._schMgr.insert_GPU(condition,name,self,estimate_time_GPU,GPU_test[2],GPU_test[3],time_stamp);
-            else:
-                #unknown
-                if(float(CPU_test[1]/CPU_test[0]) > float(GPU_test[1]/GPU_test[0])):
-                    self._schMgr.insert_CPU_long(condition,name,self,CPU_test[2],CPU_test[3]);
-                else:
-                    self._schMgr.insert_GPU_long(condition,name,self,GPU_test[2],GPU_test[3]);
-            self._schMgr.finish_test_gpu();
+            logging.info("time for cpu test:" + str(en2-st2));
+            logging.info("time till cpu test:" + str(en2-start_t));
             self._schMgr.finish_test_cpu();
-            logging.info(name+" wait for schedule(after cpu test) "+str(time.time()))
-            with condition:
-                condition.wait();
-
-
+            if(float(CPU_test[1]/GPU_test[1]) > 1):
+                estimate_time = CPU_test[0] * self.epoch_total/CPU_test[1];
+                with condition:
+                    self._schMgr.insert_CPU(condition,name,self,estimate_time);
+                    condition.wait();
+            else:
+                estimate_time = GPU_test[0] * self.epoch_total/GPU_test[1];
+                with condition:
+                    self._schMgr.insert_GPU(condition,name,self,estimate_time);
+                    condition.wait();
         #after being waken up
-        def run(func,on_GPU,*args):
-            if(on_GPU):
+        def run(func,*args):
+            result = [0,0]
+            if(self._schMgr.in_GPU(self)):
                 logging.info(name + "run on gpu")
                 result = func(TensorWrap_GPU(self),*args,True, **kwargs);
-                return result;
             else:
                 logging.info(name + "run on cpu")
                 result= func(TensorWrap_CPU(self),*args, False, **kwargs);
-                return result;
+            return result;
 
-        def finish(on_GPU,finish_all):
-            if(finish_all):
-                if(on_GPU):
-                    self._schMgr.finish_GPU_all(self)
-                else:
-                    self._schMgr.finish_CPU_all(self)
-            else:
-                if(on_GPU):
-                    self._schMgr.finish_GPU_pause(self,name)
-                else:
-                    self._schMgr.finish_CPU_pause(self,name)
-        
-        on_GPU = self._schMgr.in_GPU(self);
         st3 = time.time()
-        #result:[time,epoch,cpu util]
-        if(epoch_total != LARGE_NUM):
-            logging.info(name+"run at "+str(time.time()))
-            result = run(iter_func,on_GPU,self.epoch_total - self.epoch_done,float('inf'))  
-        else:
-            if(on_GPU):
-                time_limit = self._schMgr.get_GPU_running_job_length()
-            else:
-                time_limit = self._schMgr.get_CPU_running_job_length()
-            if(time_limit < 0):
-                time_limit = 5
-            logging.info(name+"run for"+str(time_limit)+" at "+str(time.time()))
-            result = run(iter_func,on_GPU,epoch_total,time_limit)
-        while(not run(cond_func,on_GPU)):
-            finish(on_GPU,False);
-            logging.info(name+"paused at "+str(time.time()))
+        result = run(iter_func,self.epoch_total - self.epoch_done,float('inf'))  
+        logging.info("pause at epoch:" + str(result[1])+"after "+ str(result[0]))
+        while(self.epoch_total - self.epoch_done > 0 ):
             st4 = time.time()
-            #need to check the testing currently on GPU has finished and the 
-            #corresponding dw has beed added to the queue, then it has the right place to 
-            #put itself in the queue
             while(self.stop):
                 time.sleep(0.3)
-
-            # recalculate the time
-            if(CPU_test[0] == -1):
-                estimate_time = GPU_test[0] *(self.epoch_total - self.epoch_done)/GPU_test[1];
-                self._schMgr.insert_GPU(condition,name,self,estimate_time,GPU_test[2],GPU_test[3],time_stamp);
-
-            elif(epoch_total != LARGE_NUM):
-                estimate_time_CPU = CPU_test[0] * (self.epoch_total - self.epoch_done)/CPU_test[1];
-                estimate_time_GPU = GPU_test[0] *(self.epoch_total - self.epoch_done)/GPU_test[1];
-                exec_on_CPU_time = self._schMgr.get_CPU_waiting(estimate_time_CPU);
-                exec_on_GPU_time = self._schMgr.get_GPU_waiting(estimate_time_GPU);
-                if(float(exec_on_GPU_time/exec_on_CPU_time) > 1):
-                    self._schMgr.insert_CPU(condition,name,self,estimate_time_CPU,CPU_test[2],CPU_test[3],time_stamp);
-                else:
-                    self._schMgr.insert_GPU(condition,name,self,estimate_time_GPU,GPU_test[2],GPU_test[3],time_stamp);
-            else:
-                if(not on_GPU):
-                    self._schMgr.insert_CPU_long(condition,name,self,CPU_test[2],CPU_test[3]);
-                else:
-                    self._schMgr.insert_GPU_long(condition,name,self,GPU_test[2],GPU_test[3]);
-
-            if(on_GPU):
-                self._schMgr.put_back_GPU_to_queue(self)
-            else:
-                self._schMgr.put_back_CPU_to_queue(self)
-            with condition:
-                condition.wait();
-
-
             en4 = time.time()
             logging.info("time for waiting:" + str(en4-st4));
-            logging.info(name+"run for"+str(time_limit)+" at "+str(time.time()))
-            if(epoch_total != LARGE_NUM):
-                result = run(iter_func,on_GPU,self.epoch_total - self.epoch_done,float('inf'))
-            else:
-                if(on_GPU):
-                    time_limit = self._schMgr.get_GPU_running_job_length()
-                else:
-                    time_limit = self._schMgr.get_CPU_running_job_length()
-                if(time_limit < 0):
-                    time_limit = 5
-                logging.info("run for"+str(time_limit))
-                result = run(iter_func,on_GPU,epoch_total,time_limit)
+            result = run(iter_func,self.epoch_total - self.epoch_done,float('inf'))
                 #iter_func(TensorWrap_GPU(self),self.epoch_total - self.epoch_done,float('inf'),True, *args, **kwargs);
         en3 = time.time()
-        #logging.info("time for running remaining:" + str(en3-st3));
-        result = run(test_func,on_GPU) 
-        finish(on_GPU,True);
+        logging.info("time for running remaining:" + str(en3-st3));
+        result = run(test_func) 
+        if(self._schMgr.in_GPU(self)):
+            self._schMgr.finish_GPU(self,name)
+        else:
+            self._schMgr.finish_CPU(self,name)
         end_t = time.time();
-        logging.info(name+"terminate at "+str(time.time()))
 
         return end_t - start_t;
 
@@ -1154,24 +831,6 @@ class DBC(metaclass=ABCMeta):
     def _describe(self, tblrData): pass;
 
     @abstractmethod
-    def _getBufferHitRate(self): pass;
-
-    @abstractmethod
-    def _getResponseTime(self): pass;
-
-    @abstractmethod
-    def _getGPUUsage(self): pass;
-
-    @abstractmethod
-    def _getCPUUsage(self): pass;
-
-    @abstractmethod
-    def _getThroughput(self): pass;
-
-    @abstractmethod
-    def _resetPgStatStatements(self): pass;
-
-    @abstractmethod
     def _agg(self, agfn, tblrData, collist=None, valueOnly=True): pass;
 
     def _close(self):
@@ -1191,23 +850,17 @@ class DBC(metaclass=ABCMeta):
             return super().__getattribute__(item);
         except:
             pass;
-
-        return super(self.__class__, self)._getDBTable(item);
-
         #Maybe its a database object.
         #TODO: Need to ensure that databaseworkspace.var = tabularDataObject does not work if var is a valid tablename in db.
-        # try:
-        #     #Check if we already have this table loaded up in the DB workspace.
-        #     logging.info(f"Getting parent db table for {str(item)}")
-        #     return super(self.__class__, self)._getDBTable(item);
-        # except KeyError:
-        #     #We do not have it, so let us see if the adapter implementation class can load it from the database.
-        #     tbl = self._getDBTable(item);
-        #     logging.info(f"Getting self db table for {str(tbl)}")
-
-        #     #Store the table handle for any future use.
-        #     self._tableRepo_[item] = tbl;
-        #     return tbl;
+        try:
+            #Check if we already have this table loaded up in the DB workspace.
+            return super(self.__class__, self)._getDBTable(item);
+        except KeyError:
+            #We do not have it, so let us see if the adapter implementation class can load it from the database.
+            tbl = self._getDBTable(item);
+            #Store the table handle for any future use.
+            self._tableRepo_[item] = tbl;
+            return tbl;
 
     def _setattr_(self, key, value, returnAttr=False):
         """Invoked by the remote DBC to set an attribute in DBC for use in workspace"""
@@ -1421,7 +1074,7 @@ class DBCWrap:
             setattr(self.__dbcObj__, key, valueDF);
             return;
         except :
-            #logging.exception(f"DBCWrap : Exception ({str(key)}:{str(value)})");
+            logging.exception("DBCWrap : Exception ");
             pass;
         setattr(self.__dbcObj__, key, value);
 
@@ -1484,131 +1137,7 @@ class GPUWrap:
 
             return;
         except :
-            #logging.exception("GPUWrap : Exception ");
-            pass;
-        setattr(self.__dbcObj__, key, value);
-# This class is very similar to DBCWrap class above except that here we are working tensor->cupy objects instead of NumPy to accelarate the training process.
-# To simplify, only the parts that are different from above have comments beside.
-class TensorWrap_GPU:
-    def __init__(self, dbcObj):
-        self.__dbcObj__ = dbcObj; #This is the DBC workspace object we are wrapping
-        self.__tDataColumns__ = {}; #Keep track of the column metadata of all TabularData variable names that we have seen so far.
-
-    def __getattribute__(self, item):
-        #Trap the calls to ALL my object variables here itself.
-        if (item in ('__dbcObj__', '__tDataColumns__')):
-            return super().__getattribute__(item);
-
-        #Every other variable must come from the DBC object that we are wrapping.
-
-        val = getattr(super().__getattribute__('__dbcObj__'), item);
-        if(isinstance(val, TabularData)): #If the value returned from the DBC object is of type TabularData
-            tDataCols = super().__getattribute__('__tDataColumns__');
-            tDataCols[item] = val.columns; #We will keep track of that variable/objects metadata
-            #Instead of returning the TabularData object, we will return only the NumPy matrix representation.
-            #But since tabular data objects internally stored matrices in transposed format, we will have to transpose it
-            # Back to regular format first.
-            val = val.matrix.T;
-            if(not val.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
-                val = np.copy(val, order='C');
-            if(len(val.shape) == 1):
-                val = val.reshape(len(val), 1, order='C');
-            #logging.debug("DBCWrap, getting : item {}, shape {}".format(item, val.shape));
-        if type(val) is np.ndarray: 
-            val = torch.tensor(val);
-        if hasattr(val, 'to'):
-            val = val.to(torch.device("cuda:0"));
-        return val;
-    def __setattr__(self, key, value):
-        #Trap the calls to ALL my object variables here itself.
-        if (key in ('__dbcObj__', '__tDataColumns__')):
-            return super().__setattr__(key, value);
-
-        #logging.debug("DBCWrap, setting called : item {}, value type {}".format(key, type(value)));
-        #Every other variable is set inside the DBC object that we are wrapping.
-        try:
-            #logging.debug("DBCWrap: setattr : current known tabular data objects : {}".format(self.__tDataColumns__.keys()));
-
-            #Convert numpy matrix back to TabularData object
-            #Transpose the matrix to fit the internal form of TabularData objects.
-            if(isinstance(value,np.ndarray)):
-                value = value.T;
-            if(not value.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
-                value = np.copy(value, order='C');
-            #Build a new TabularData object using virtual transformation.
-            #logging.debug("DBCWrap, setting : item {}, shape {}".format(key, value.shape));
-            if key in self.__tDataColumns__:
-                tDataCols = self.__tDataColumns__[key];
-            #If we got to this line, then it means "key" was a TabularData object.
-            # So we need to build a new TabularData object using the original column metadata.
-                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, cols=tuple(tDataCols.keys()), colmeta=tDataCols, dbc=self.__dbcObj__);
-            else:
-            #If we go to this line, then it means "key" is a new variable.
-            # So we need to build a new TabularData from scratch
-                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, dbc=self.__dbcObj__);
-            setattr(self.__dbcObj__, key, valueDF);
-            return;
-        except :
-            #logging.exception(f"TensorWrapGPU : Exception ({str(key)}:{str(value)})");
-            pass;
-        setattr(self.__dbcObj__, key, value);
-# This class is very similar to DBCWrap class above except that here we are working tensor->cupy objects instead of NumPy to accelarate the training process.
-# To simplify, only the parts that are different from above have comments beside.
-class TensorWrap_CPU:
-    def __init__(self, dbcObj):
-        self.__dbcObj__ = dbcObj; #This is the DBC workspace object we are wrapping
-        self.__tDataColumns__ = {}; #Keep track of the column metadata of all TabularData variable names that we have seen so far.
-
-    def __getattribute__(self, item):
-        #Trap the calls to ALL my object variables here itself.
-        if (item in ('__dbcObj__', '__tDataColumns__')):
-            return super().__getattribute__(item);
-
-        #Every other variable must come from the DBC object that we are wrapping.
-
-        val = getattr(super().__getattribute__('__dbcObj__'), item);
-        if(isinstance(val, TabularData)): #If the value returned from the DBC object is of type TabularData
-            tDataCols = super().__getattribute__('__tDataColumns__');
-            tDataCols[item] = val.columns; #We will keep track of that variable/objects metadata
-            #Instead of returning the TabularData object, we will return only the NumPy matrix representation.
-            #But since tabular data objects internally stored matrices in transposed format, we will have to transpose it
-            # Back to regular format first.
-            val = val.matrix.T;
-            if(not val.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
-                val = np.copy(val, order='C');
-            if(len(val.shape) == 1):
-                val = val.reshape(len(val), 1, order='C');
-            #logging.debug("DBCWrap, getting : item {}, shape {}".format(item, val.shape));
-        if type(val) is np.ndarray:
-            val = torch.tensor(val);
-        return val;
-    def __setattr__(self, key, value):
-        #Trap the calls to ALL my object variables here itself.
-        if (key in ('__dbcObj__', '__tDataColumns__')):
-            return super().__setattr__(key, value);
-        try:
-            #logging.debug("DBCWrap: setattr : current known tabular data objects : {}".format(self.__tDataColumns__.keys()));
-
-            #Convert numpy matrix back to TabularData object
-            #Transpose the matrix to fit the internal form of TabularData objects.
-            value = value.T;
-            if(not value.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
-                value = np.copy(value, order='C');
-            #Build a new TabularData object using virtual transformation.
-            #logging.debug("DBCWrap, setting : item {}, shape {}".format(key, value.shape));
-            if key in self.__tDataColumns__:
-                tDataCols = self.__tDataColumns__[key];
-            #If we got to this line, then it means "key" was a TabularData object.
-            # So we need to build a new TabularData object using the original column metadata.
-                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, cols=tuple(tDataCols.keys()), colmeta=tDataCols, dbc=self.__dbcObj__);
-            else:
-            #If we go to this line, then it means "key" is a new variable.
-            # So we need to build a new TabularData from scratch
-                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, dbc=self.__dbcObj__);
-            setattr(self.__dbcObj__, key, valueDF);
-            return;
-        except :
-            #logging.exception(f"TensorWrapCPU : Exception ({str(key)}:{str(value)})");
+            logging.exception("GPUWrap : Exception ");
             pass;
         setattr(self.__dbcObj__, key, value);
 # This class is very similar to DBCWrap class above except that here we are working tensor->cupy objects instead of NumPy to accelarate the training process.
@@ -1650,20 +1179,6 @@ class TensorWrap_GPU:
             val = torch.tensor(val);
         if hasattr(val, 'to'):
             val = val.to(torch.device("cuda:0"));
-        if isinstance(val,torch.optim.Optimizer):
-            logging.info("is a optim")
-            for param in val.state.values():
-            # Not sure there are any global tensors in the state dict
-                if isinstance(param, torch.Tensor):
-                    param.data = param.data.to(torch.device("cuda:0"))
-                    if param._grad is not None:
-                        param._grad.data = param._grad.data.to(torch.device("cuda:0"))
-                elif isinstance(param, dict):
-                    for subparam in param.values():
-                        if isinstance(subparam, torch.Tensor):
-                            subparam.data = subparam.data.to(torch.device("cuda:0"))
-                            if subparam._grad is not None:
-                                subparam._grad.data = subparam._grad.data.to(torch.device("cuda:0"))
         return val;
     def __setattr__(self, key, value):
         #Trap the calls to ALL my object variables here itself.
@@ -1729,20 +1244,6 @@ class TensorWrap_CPU:
             val = torch.tensor(val);
         if hasattr(val, 'to'):
             val = val.to(torch.device("cpu"));
-        if isinstance(val,torch.optim.Optimizer):
-            logging.info("is a optim cpu")
-            for param in val.state.values():
-            # Not sure there are any global tensors in the state dict
-                if isinstance(param, torch.Tensor):
-                    param.data = param.data.to(torch.device("cpu"))
-                    if param._grad is not None:
-                        param._grad.data = param._grad.data.to(torch.device("cpu"))
-                elif isinstance(param, dict):
-                    for subparam in param.values():
-                        if isinstance(subparam, torch.Tensor):
-                            subparam.data = subparam.data.to(torch.device("cpu"))
-                            if subparam._grad is not None:
-                                subparam._grad.data = subparam._grad.data.to(torch.device("cpu"))
         return val;
     def __setattr__(self, key, value):
         #Trap the calls to ALL my object variables here itself.

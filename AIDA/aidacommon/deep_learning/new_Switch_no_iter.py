@@ -1,15 +1,22 @@
+#same content with Switch_between.py,but in this version the number of iteration is passed to _job(),
+#function iterate(): defines what to do in one iteration, so that we can count how many iteration is done in 1s
+
 from aida.aida import *;
 import sys;
 import pandas as pd;
 import numpy as np;
+import time as time;
+from ctypes import *
+import os
 import torch;
 import torch.nn as nn;
 import collections;
-host = 'localhost'; dbname = 'sf01'; user = 'sf01'; passwd = 'sf01'; jobName = 'torchLinear'; port = 55660;
+host = 'localhost'; dbname = 'bixi'; user = 'bixi'; passwd = 'bixi'; jobName = 'torchLinear'; port = 55660;
 dw = AIDA.connect(host,dbname,user,passwd,jobName,port);
 
 name = sys.argv[1]
-n = 50000
+n = int(sys.argv[2])
+dw.loss_target = float(sys.argv[3])
 df = pd.DataFrame(np.random.randn(n))
 df.columns = ['A']
 df['B'] = np.random.randn(n)
@@ -83,39 +90,64 @@ dw.epoch_done = 0
 dw.criterion = nn.MSELoss()
 model = get_training_model()
 dw.model = model
-dw.epoch_size = int(sys.argv[2])
-dw.epoch_batch = int(sys.argv[3])
 
 
-def trainingLoop(dw):
+
+def iterate(dw,iter_num,time_limit,using_GPU):
     model = dw.model
     optimizer = torch.optim.RMSprop(model.parameters(), lr=0.001)
     normed_train_data = dw.normed_train_data
     train_target = dw.train_target
     criterion = dw.criterion
-    for epoch in range(dw.epoch_batch):
-        predicted = model(normed_train_data)
-        loss = criterion(predicted, train_target)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
+    start = time.time()
+    num_finish = 0;
+
+    for i in range (iter_num):
+        if(time.time() - start < time_limit):
+            predicted = model(normed_train_data)
+            loss = criterion(predicted, train_target)
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        else:
+            num_finish = i;
+            break;
+        if(dw.stop):
+            num_finish = i;
+            break;
+        #if(using_GPU and dw.stop):
+        #    num_finish = i;
+        #    logging.info("gpu: stop at iter:"+str(i))
+        #    break;
+
+        #used to stop for a short while
+        #while(dw.stop):
+        #    time.sleep(0.4)
+        #    logging.info("cpu: stop at iter:"+str(i))
+        #    logging.info("cpu: stop at time"+str(time.time()-start))
+
+    dw.model = model
+    if( num_finish == 0):
+         num_finish = iter_num;
+    epoch_done = dw.epoch_done + num_finish
+    dw.epoch_done = epoch_done
+    logging.info("total iter:"+str(num_finish))
+    logging.info("totally end time"+ str(time.time() - start))
+    return [(time.time() - start),num_finish,psutil.cpu_percent()]
+
+def condition(dw,using_GPU):
     normed_test_data = dw.normed_test_data
     test_target = dw.test_target
-    predicted = model(normed_test_data)
+    predicted = dw.model(normed_test_data)
     loss = dw.criterion(predicted, test_target)
-    return_mesg = "the loss of the model is: " + str(loss)
-    dw.model = model
-    epoch_done = dw.epoch_done + dw.epoch_batch
-    dw.epoch_done = epoch_done
-    return return_mesg
-
-def condition(dw):
-    if dw.epoch_done >= dw.epoch_size: 
+    if loss < dw.loss_target:
         return True
     else:
+        logging.info("loss" + str(loss))
         return False
 
-def test_model(dw):
+
+def test_model(dw,using_GPU):
     normed_test_data = dw.normed_test_data
     test_target = dw.test_target
     predicted = dw.model(normed_test_data)
@@ -124,8 +156,7 @@ def test_model(dw):
     return_mesg = ""
     return return_mesg
 
-return_mesg = dw._Schedule(trainingLoop,condition,test_model,name)
-f = open("./result.txt", "a")
-f.write(str(return_mesg)+"\n")
-f.close()
+
+#return_mesg = dw._append(iterate,condition,test_model,name)
+return_mesg = dw._job(iterate,condition,test_model,name)
 print(name+ " time: " + str(return_mesg))

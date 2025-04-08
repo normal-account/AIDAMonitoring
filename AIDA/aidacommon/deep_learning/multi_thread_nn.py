@@ -1,11 +1,21 @@
-from aida.aida import *;
+import pandas as pd
+import torch
 import time
-host = 'localhost'; dbname = 'bixi'; user = 'bixi'; passwd = 'bixi'; jobName = 'torchLinear'; port = 55660;
-dw = AIDA.connect(host,dbname,user,passwd,jobName,port);
-def trainingLoop(dw):
+import numpy as np
+from numpy.random import randn
+import torch.nn as nn
+from collections import OrderedDict
+from threading import Thread
+
+def exect(on_GPU):
     script_start = time.time()
-    logging.info('Script start time ' + str(script_start))
-    n = 10000
+    n = 0
+    if(on_GPU):
+        n = 1000000
+        epoch_size = 2000
+    else:
+        n = 50000
+        epoch_size =10000
     df = pd.DataFrame(randn(n))
     df.columns = ['A']
     df['B'] = randn(n)
@@ -72,7 +82,7 @@ def trainingLoop(dw):
     # In[121]:
 
     def get_training_model(inFeatures=len(train_dataset.keys()), hiddenDim=16, nbClasses=1):
-        # construct a shallow, sequential neural network
+      # construct a shallow, sequential neural network
         model = nn.Sequential(OrderedDict([
             ("hidden_layer_1", nn.Linear(inFeatures, hiddenDim)),
             ("activation_1", nn.ReLU()),
@@ -94,14 +104,19 @@ def trainingLoop(dw):
     # In[124]:
 
     criterion = nn.MSELoss()
-    epoch_size = 50000
 
     # In[125]:
 
     model(normed_train_data).size()
 
+    # In[126]:
+    st = time.time()
+    if(on_GPU):
+        model = model.to(torch.device("cuda:0"))
+        normed_train_data = normed_train_data.to(torch.device("cuda:0"))
+        train_target = train_target.to(torch.device("cuda:0"))
+    en = time.time()
     start_time = time.time()
-    logging.info('Training start time ' + str(start_time))
     for epoch in range(epoch_size):
         predicted = model(normed_train_data)
         loss = criterion(predicted, train_target)
@@ -109,21 +124,35 @@ def trainingLoop(dw):
         optimizer.step()
         optimizer.zero_grad()
     end_time = time.time()
-    logging.info('Training end time ' + str(end_time))
     execution_time = end_time - start_time
-    #200000
-    logging.info('The execution time on CPU for a dataset of size 10000 and 50000 epochs using Pytorch is: '+str(execution_time))
-    return_mesg = "The execution time on CPU for a dataset of size 10000 and 50000 epochs using Pytorch is:" + str(execution_time)
+    #2000000
+    #return_mesg = "The execution time on GPU for a dataset of size 10000 and 50000 epochs using Pytorch is:" + str(execution_time)
     # In[127]:
-    normed_test_data = normed_test_data
-    test_target = test_target
+    if(on_GPU):
+        normed_test_data = normed_test_data.to(torch.device("cuda:0"))
+        test_target = test_target.to(torch.device("cuda:0"))
     predicted = model(normed_test_data)
     loss = criterion(predicted, test_target)
-    return_mesg = return_mesg + " and the loss of the model is: " + str(loss)
+    #return_mesg = return_mesg + " and the loss of the model is: " + str(loss)
     script_end = time.time()
-    logging.info('The script end time is: '+str(script_end))
-    return return_mesg
+    return_mesg = "total time"+str(script_end - st )
+    print(return_mesg)
+
+def mult():
+    st = time.time()
+    A = np.random.rand(2000,30)
+    B = np.random.rand(30,7)
+
+    for x in range(300000):
+        C = A.dot(B)
+    en = time.time()
+    print("mult:"+str(en-st))
 
 
-return_mesg = dw._X(trainingLoop)
-print(return_mesg)
+#threadA = Thread(target=exect, args=(False,))
+threadB = Thread(target=exect, args=(False,))
+#threadB = Thread(target=mult, args=())
+#threadA.start()
+threadB.start()
+#threadA.join()
+threadB.join()

@@ -126,7 +126,7 @@ $$ LANGUAGE plpython3u;
 
 --There is no built-in aggregate Median in Postgresql
 --The following snippet is on Postgres wiki and also part of the ulib_agg user-defined library
-CREATE OR REPLACE FUNCTION _final_median(anycompatiblearray) RETURNS float8 AS $$
+CREATE OR REPLACE FUNCTION _final_median(anyarray) RETURNS float8 AS $$
   WITH q AS
   (
      SELECT val
@@ -147,9 +147,9 @@ CREATE OR REPLACE FUNCTION _final_median(anycompatiblearray) RETURNS float8 AS $
   ) q2;
 $$ LANGUAGE sql IMMUTABLE;
 
-CREATE OR REPLACE AGGREGATE median(anycompatible) (
+CREATE OR REPLACE AGGREGATE median(anyelement) (
   SFUNC=array_append,
-  STYPE=anycompatiblearray,
+  STYPE=anyarray,
   FINALFUNC=_final_median,
   INITCOND='{}'
 );

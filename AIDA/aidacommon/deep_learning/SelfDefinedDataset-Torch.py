@@ -4,7 +4,7 @@ dw = AIDA.connect(host,dbname,user,passwd,jobName,port);
 def trainingLoop(dw):
     script_start = time.time()
     logging.info('Script start time ' + str(script_start))
-    n = 100000
+    n = 5000
     df = pd.DataFrame(randn(n))
     df.columns = ['A']
     df['B'] = randn(n)
@@ -93,16 +93,19 @@ def trainingLoop(dw):
     # In[124]:
 
     criterion = nn.MSELoss()
-    epoch_size = 30000
+    epoch_size = 40000
 
     # In[125]:
 
     model(normed_train_data).size()
 
     # In[126]:
+    st = time.time()
     model = model.to(torch.device("cuda:0"))
     normed_train_data = normed_train_data.to(torch.device("cuda:0"))
     train_target = train_target.to(torch.device("cuda:0"))
+    en = time.time()
+    logging.info('data loading time ' + str(en - st))
     start_time = time.time()
     logging.info('Training start time ' + str(start_time))
     for epoch in range(epoch_size):
@@ -116,15 +119,16 @@ def trainingLoop(dw):
     execution_time = end_time - start_time
     #2000000
     logging.info('The execution time on GPU for a dataset of size 10000 and 50000 epochs using Pytorch is: '+str(execution_time))
-    return_mesg = "The execution time on GPU for a dataset of size 10000 and 50000 epochs using Pytorch is:" + str(execution_time)
+    #return_mesg = "The execution time on GPU for a dataset of size 10000 and 50000 epochs using Pytorch is:" + str(execution_time)
     # In[127]:
     normed_test_data = normed_test_data.to(torch.device("cuda:0"))
     test_target = test_target.to(torch.device("cuda:0"))
     predicted = model(normed_test_data)
     loss = criterion(predicted, test_target)
-    return_mesg = return_mesg + " and the loss of the model is: " + str(loss)
+    #return_mesg = return_mesg + " and the loss of the model is: " + str(loss)
     script_end = time.time()
-    logging.info('The script end time is: '+str(script_end))
+    logging.info('The scrtime is: '+str(script_end))
+    return_mesg = "total time"+str(script_end - st )
     return return_mesg
 
 
