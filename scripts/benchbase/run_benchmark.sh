@@ -6,3 +6,4 @@ if [ $# -ne 1 ]; then
 fi
 
 java -jar benchbase-postgres/benchbase.jar -b $1 -c config/postgres/sample_$1_config.xml --create=true --load=true --execute=true
+

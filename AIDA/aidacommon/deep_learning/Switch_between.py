@@ -5,11 +5,19 @@ import numpy as np;
 import torch;
 import torch.nn as nn;
 import collections;
+<<<<<<< HEAD
+host = 'yz_Server'; dbname = 'sf01'; user = 'sf01'; passwd = 'sf01'; jobName = 'torchLinear'; port = 55660;
+dw = AIDA.connect(host,dbname,user,passwd,jobName,port);
+
+name = sys.argv[1]
+n = 100000
+=======
 host = 'localhost'; dbname = 'sf01'; user = 'sf01'; passwd = 'sf01'; jobName = 'torchLinear'; port = 55660;
 dw = AIDA.connect(host,dbname,user,passwd,jobName,port);
 
 name = sys.argv[1]
 n = 50000
+>>>>>>> new
 df = pd.DataFrame(np.random.randn(n))
 df.columns = ['A']
 df['B'] = np.random.randn(n)

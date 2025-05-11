@@ -28,7 +28,7 @@ from aidacommon.rop import ROMgr;
 from aidacommon.rdborm import *;
 from aidas.scheduler import ScheduleManager as scheduler;
 
-from aidas.models import *;
+#from aidas.models import *;
 
 
 import pickle
@@ -438,29 +438,43 @@ class DBC(metaclass=ABCMeta):
         start_time = time.time()
 
         #wrap up everything when is assigned to gpu
-        def all_to_gpu():
+        def all_to_gpu(condition):
+            import ctypes
+            result = ""
             while not cond_func(TensorWrap_GPU(self), *args, **kwargs):
-                result=iter_func(TensorWrap_GPU(self), *args, **kwargs);
-            result = test_func(TensorWrap_GPU(self), *args, **kwargs);
+                result=result+iter_func(TensorWrap_GPU(self), *args, **kwargs);
+            test_func(TensorWrap_GPU(self), *args, **kwargs);
             return result;
     
-        
-
+        # INFO:root:0
+        # INFO:root:Condition : <Condition(<locked _thread.RLock object owner=130666152855104 count=1 at 0x76d7586e2400>, 0)>
+        # INFO:root:torchLinear2 to tail
+        # INFO:root:end schedule
+        # INFO:root:Done scheduling.
+        result_str = ""
         while not cond_func(self, *args, **kwargs):
             condition = threading.Condition();
             with condition:
-                logging.info(condition);
+                #logging.info(f"Condition : {condition}");
                 self._schMgr.schedule_GPU(condition,name);
                 condition.wait();
+                
             if(self._schMgr.in_GPU(condition)):
                 use_gpu = True;
                 logging.info(name+ " run on gpu");
                 #result = all_to_gpu();
-                all_to_gpu();
+                result_str = result_str + all_to_gpu(condition);
             else:
-                logging.info(name+ " run on cpu");
-                #result = iter_func(TensorWrap_CPU(self), *args, **kwargs);
-                iter_func(TensorWrap_CPU(self), *args, **kwargs);
+                #max_cpu = 80
+                #cpu_util = psutil.cpu_percent()
+                #if cpu_util >= max_cpu:
+                #    logging.info(f"Waiting for cpu usage to go down... (at {str(cpu_util)})");
+                #    time.sleep( 1 )
+                #    cpu_util = psutil.cpu_percent()
+                
+                result_str = result_str + str(iter_func(TensorWrap_CPU(self), *args, **kwargs))
+
+                #iter_func(TensorWrap_CPU(self), *args, **kwargs);
                 self._schMgr.finish_CPU(condition,name);
         
         #after reach the cond_function, test if the job has been sent to GPU
@@ -476,6 +490,10 @@ class DBC(metaclass=ABCMeta):
         end_time = time.time()
         #result = result +name+ " time: " + str(end_time - start_time)
         result = end_time - start_time
+
+        with open(f"/home/build/benchbase/results/{name}.txt", "w+") as file:
+            file.write(f"[{result_str}]" );
+
         return result;
 
     def getPlotLayout(self, plotURL):
@@ -1211,7 +1229,7 @@ class DBC(metaclass=ABCMeta):
 
     def _setattr_(self, key, value, returnAttr=False):
         """Invoked by the remote DBC to set an attribute in DBC for use in workspace"""
-        #logging.debug("DBC workspace : to set {} to value of type {}".format(key, type(value)));
+        logging.debug("DBC workspace : to set {} to value of type {}".format(key, type(value)));
         try: #First see if we already have an attribute.
             cur =  self.__getattribute__(key);
         except:
@@ -1371,6 +1389,7 @@ class DBCWrap:
         self.__tDataColumns__ = {}; #Keep track of the column metadata of all TabularData variable names that we have seen so far.
 
     def __getattribute__(self, item):
+        logging.debug("DBCWrap: to GET {}".format(item));
         #Trap the calls to ALL my object variables here itself.
         if (item in ('__dbcObj__', '__tDataColumns__')):
             return super().__getattribute__(item);
@@ -1389,7 +1408,6 @@ class DBCWrap:
                 val = np.copy(val, order='C');
             if(len(val.shape) == 1):
                 val = val.reshape(len(val), 1, order='C');
-            #logging.debug("DBCWrap, getting : item {}, shape {}".format(item, val.shape));
         return val;
 
     def __setattr__(self, key, value):
@@ -1434,6 +1452,7 @@ class GPUWrap:
         self.__tDataColumns__ = {};
 
     def __getattribute__(self, item):
+        logging.debug("GPUWrap: to GET {}".format(item));
         if (item in ('__dbcObj__', '__tDataColumns__')):
             return super().__getattribute__(item);
 
@@ -1495,6 +1514,7 @@ class TensorWrap_GPU:
         self.__tDataColumns__ = {}; #Keep track of the column metadata of all TabularData variable names that we have seen so far.
 
     def __getattribute__(self, item):
+        logging.debug("TensorWrap_GPU: to GET {}".format(item));
         #Trap the calls to ALL my object variables here itself.
         if (item in ('__dbcObj__', '__tDataColumns__')):
             return super().__getattribute__(item);
@@ -1513,11 +1533,15 @@ class TensorWrap_GPU:
                 val = np.copy(val, order='C');
             if(len(val.shape) == 1):
                 val = val.reshape(len(val), 1, order='C');
-            #logging.debug("DBCWrap, getting : item {}, shape {}".format(item, val.shape));
+            logging.debug("TensorWrap_GPU, getting : item {}, shape {}".format(item, val.shape));
         if type(val) is np.ndarray: 
+            logging.debug("TensorWrap_GPU convert to tensor on {}".format(item));
             val = torch.tensor(val);
         if hasattr(val, 'to'):
+            logging.debug("TensorWrap_GPU val.to on {}".format(item));
             val = val.to(torch.device("cuda:0"));
+        logging.debug("TensorWrap_GPU return on {}".format(item));
+    
         return val;
     def __setattr__(self, key, value):
         #Trap the calls to ALL my object variables here itself.
@@ -1609,167 +1633,5 @@ class TensorWrap_CPU:
             return;
         except :
             #logging.exception(f"TensorWrapCPU : Exception ({str(key)}:{str(value)})");
-            pass;
-        setattr(self.__dbcObj__, key, value);
-# This class is very similar to DBCWrap class above except that here we are working tensor->cupy objects instead of NumPy to accelarate the training process.
-# To simplify, only the parts that are different from above have comments beside.
-class TensorWrap_GPU:
-    def __init__(self, dbcObj):
-        self.__dbcObj__ = dbcObj; #This is the DBC workspace object we are wrapping
-        self.__tDataColumns__ = {}; #Keep track of the column metadata of all TabularData variable names that we have seen so far.
-
-    def __getattribute__(self, item):
-        #Trap the calls to ALL my object variables here itself.
-        if (item in ('__dbcObj__', '__tDataColumns__')):
-            return super().__getattribute__(item);
-
-        #Every other variable must come from the DBC object that we are wrapping.
-
-        val = getattr(super().__getattribute__('__dbcObj__'), item);
-        if(isinstance(val, TabularData)): #If the value returned from the DBC object is of type TabularData
-            tDataCols = super().__getattribute__('__tDataColumns__');
-            tDataCols[item] = val.columns; #We will keep track of that variable/objects metadata
-            #Instead of returning the TabularData object, we will return only the NumPy matrix representation.
-            #But since tabular data objects internally stored matrices in transposed format, we will have to transpose it
-            # Back to regular format first.
-            val = val.matrix.T;
-            if(not val.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
-                val = np.copy(val, order='C');
-            if(len(val.shape) == 1):
-                val = val.reshape(len(val), 1, order='C');
-            #logging.debug("DBCWrap, getting : item {}, shape {}".format(item, val.shape));
-
-        #directly create tensor on GPU    
-        #if type(val) is np.ndarray:
-        #    val = torch.tensor(val,device=torch.device("cuda:0"));
-        #elif hasattr(val, 'to'):
-        #    val = val.to(torch.device("cuda:0"));
-        
-        # create tensor on CPU then to GPU
-        if type(val) is np.ndarray: 
-            val = torch.tensor(val);
-        if hasattr(val, 'to'):
-            val = val.to(torch.device("cuda:0"));
-        if isinstance(val,torch.optim.Optimizer):
-            logging.info("is a optim")
-            for param in val.state.values():
-            # Not sure there are any global tensors in the state dict
-                if isinstance(param, torch.Tensor):
-                    param.data = param.data.to(torch.device("cuda:0"))
-                    if param._grad is not None:
-                        param._grad.data = param._grad.data.to(torch.device("cuda:0"))
-                elif isinstance(param, dict):
-                    for subparam in param.values():
-                        if isinstance(subparam, torch.Tensor):
-                            subparam.data = subparam.data.to(torch.device("cuda:0"))
-                            if subparam._grad is not None:
-                                subparam._grad.data = subparam._grad.data.to(torch.device("cuda:0"))
-        return val;
-    def __setattr__(self, key, value):
-        #Trap the calls to ALL my object variables here itself.
-        if (key in ('__dbcObj__', '__tDataColumns__')):
-            return super().__setattr__(key, value);
-
-        #logging.debug("DBCWrap, setting called : item {}, value type {}".format(key, type(value)));
-        #Every other variable is set inside the DBC object that we are wrapping.
-        try:
-            #logging.debug("DBCWrap: setattr : current known tabular data objects : {}".format(self.__tDataColumns__.keys()));
-
-            #Convert numpy matrix back to TabularData object
-            #Transpose the matrix to fit the internal form of TabularData objects.
-            if(isinstance(value,np.ndarray)):
-                value = value.T;
-            if(not value.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
-                value = np.copy(value, order='C');
-            #Build a new TabularData object using virtual transformation.
-            #logging.debug("DBCWrap, setting : item {}, shape {}".format(key, value.shape));
-            if key in self.__tDataColumns__:
-                tDataCols = self.__tDataColumns__[key];
-            #If we got to this line, then it means "key" was a TabularData object.
-            # So we need to build a new TabularData object using the original column metadata.
-                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, cols=tuple(tDataCols.keys()), colmeta=tDataCols, dbc=self.__dbcObj__);
-            else:
-            #If we go to this line, then it means "key" is a new variable.
-            # So we need to build a new TabularData from scratch
-                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, dbc=self.__dbcObj__);
-            setattr(self.__dbcObj__, key, valueDF);
-            return;
-        except :
-            logging.exception("DBCWrap : Exception ");
-            pass;
-        setattr(self.__dbcObj__, key, value);
-# This class is very similar to DBCWrap class above except that here we are working numpy -> tensor objects instead of NumPy to accelarate the training process.
-# To simplify, only the parts that are different from above have comments beside.
-class TensorWrap_CPU:
-    def __init__(self, dbcObj):
-        self.__dbcObj__ = dbcObj; #This is the DBC workspace object we are wrapping
-        self.__tDataColumns__ = {}; #Keep track of the column metadata of all TabularData variable names that we have seen so far.
-
-    def __getattribute__(self, item):
-        #Trap the calls to ALL my object variables here itself.
-        if (item in ('__dbcObj__', '__tDataColumns__')):
-            return super().__getattribute__(item);
-
-        #Every other variable must come from the DBC object that we are wrapping.
-
-        val = getattr(super().__getattribute__('__dbcObj__'), item);
-        if(isinstance(val, TabularData)): #If the value returned from the DBC object is of type TabularData
-            tDataCols = super().__getattribute__('__tDataColumns__');
-            tDataCols[item] = val.columns; #We will keep track of that variable/objects metadata
-            #Instead of returning the TabularData object, we will return only the NumPy matrix representation.
-            #But since tabular data objects internally stored matrices in transposed format, we will have to transpose it
-            # Back to regular format first.
-            val = val.matrix.T;
-            if(not val.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
-                val = np.copy(val, order='C');
-            if(len(val.shape) == 1):
-                val = val.reshape(len(val), 1, order='C');
-            #logging.debug("DBCWrap, getting : item {}, shape {}".format(item, val.shape));
-        if type(val) is np.ndarray:
-            val = torch.tensor(val);
-        if hasattr(val, 'to'):
-            val = val.to(torch.device("cpu"));
-        if isinstance(val,torch.optim.Optimizer):
-            logging.info("is a optim cpu")
-            for param in val.state.values():
-            # Not sure there are any global tensors in the state dict
-                if isinstance(param, torch.Tensor):
-                    param.data = param.data.to(torch.device("cpu"))
-                    if param._grad is not None:
-                        param._grad.data = param._grad.data.to(torch.device("cpu"))
-                elif isinstance(param, dict):
-                    for subparam in param.values():
-                        if isinstance(subparam, torch.Tensor):
-                            subparam.data = subparam.data.to(torch.device("cpu"))
-                            if subparam._grad is not None:
-                                subparam._grad.data = subparam._grad.data.to(torch.device("cpu"))
-        return val;
-    def __setattr__(self, key, value):
-        #Trap the calls to ALL my object variables here itself.
-        if (key in ('__dbcObj__', '__tDataColumns__')):
-            return super().__setattr__(key, value);
-        try:
-            #logging.debug("DBCWrap: setattr : current known tabular data objects : {}".format(self.__tDataColumns__.keys()));
-
-            #Convert numpy matrix back to TabularData object
-            #Transpose the matrix to fit the internal form of TabularData objects.
-            value = value.T;
-            if(not value.flags['C_CONTIGUOUS']): #If the matrix is not C_CONTIGUOUS, make a copy in C_CONTGUOUS form.
-                value = np.copy(value, order='C');
-            #Build a new TabularData object using virtual transformation.
-            #logging.debug("DBCWrap, setting : item {}, shape {}".format(key, value.shape));
-            if key in self.__tDataColumns__:
-                tDataCols = self.__tDataColumns__[key];
-            #If we got to this line, then it means "key" was a TabularData object.
-            # So we need to build a new TabularData object using the original column metadata.
-                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, cols=tuple(tDataCols.keys()), colmeta=tDataCols, dbc=self.__dbcObj__);
-            else:
-            #If we go to this line, then it means "key" is a new variable.
-            # So we need to build a new TabularData from scratch
-                valueDF = DBC._dataFrameClass_._virtualData_(lambda:value, dbc=self.__dbcObj__);
-            setattr(self.__dbcObj__, key, valueDF);
-            return;
-        except :
-            logging.exception("DBCWrap : Exception ");
             pass;
         setattr(self.__dbcObj__, key, value);

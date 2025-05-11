@@ -110,6 +110,8 @@ RUN tar xvzf target/benchbase-postgres.tgz
 RUN chmod +x scripts/**/*
 COPY scripts/benchbase/* /home/build/benchbase/
 COPY scripts/postgres/* /home/build/postgres/
+COPY scripts/*.sh /home/build/
+COPY scripts/*.sql /home/build/
 RUN ln -s /home/build/postgres/env.sh /home/build/AIDA/aidaPostgreSQL/scripts/env.sh # Symbolic link for the env script
 # The * makes it optional, since postgres-data.zip is not in the repo by default
 run echo test

@@ -80,9 +80,10 @@ class ScheduleManager(metaclass=ABCMeta):
                         #before the former is really start working
                         while(len(self.__GPUQueue)> 0):
                             if(len(self.__GPUQueue)> 0):
-                                deviceID = GPUtil.getFirstAvailable(order = 'last', maxLoad=0.5, maxMemory=0.5, attempts=1)
+                                deviceID = GPUtil.getFirstAvailable(order = 'last', maxLoad=1, maxMemory=1, attempts=1)
                                 #incase we have assigned the gpu but the work is not start running
-                                logging.info(f"Device ID : {str(deviceID[0])}");
+                                #logging.info(f"Device ID : {str(deviceID[0])}");
+                                self.__gpu_free = False # TODO ::: REMOVE !!!!!
                                 if 0 == deviceID[0] and self.__gpu_free:
                                     self.__gpu_free = False;
                                     cv = self.__GPUQueue.popleft();
@@ -92,10 +93,9 @@ class ScheduleManager(metaclass=ABCMeta):
                                     self.invoke_CPU(cv);
                                     self.__cpu_free = False;
                                 else:
+                                    logging.info(f"BREAKING HERE");
                                     break;
                             elif(len(self.__CPUQueue)> 0):
-                                logging.info(f"Going on cpu....");
-
                                 if(self.__cpu_free):
                                     cv = self.__CPUQueue.popleft();
                                     self.invoke_CPU(cv);
@@ -137,8 +137,7 @@ class ScheduleManager(metaclass=ABCMeta):
                     self.__CPU_inuse_name.append(name);
                 self.__cpu_free = True;
                 self.wake_up();
-                logging.info(name+" finish cpu");
-                logging.info(self.__CPU_inuse.count(condition_var));
+                #logging.info(self.__CPU_inuse.count(condition_var));
 
             def cleanup_CPU(self,name):
                 if(self.__CPU_inuse_name.count(name) > 0):
@@ -150,9 +149,7 @@ class ScheduleManager(metaclass=ABCMeta):
             def schedule_GPU(self, condition_var,name):
                 with __ScheduleManager.__RepoLock:
                     self.__GPUQueue.append(condition_var);
-                    logging.info(name+" to tail");
                     self.wake_up();
-                    logging.info("end schedule");
 
             # RR strategy:
             # put a job that cannot be executed on GPU

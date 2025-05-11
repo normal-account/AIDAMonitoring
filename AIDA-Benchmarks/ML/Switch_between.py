@@ -86,39 +86,9 @@ dw.model = model
 dw.epoch_size = int(sys.argv[2])
 dw.epoch_batch = int(sys.argv[3])
 
-
-def trainingLoop(dw):
-    import logging
-    import torch;
-    model = dw.model
-    optimizer = torch.optim.RMSprop(model.parameters(), lr=0.001)
-    normed_train_data = dw.normed_train_data
-    train_target = dw.train_target
-    criterion = dw.criterion
-    for epoch in range(dw.epoch_batch):
-        predicted = model(normed_train_data)
-        loss = criterion(predicted, train_target)
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-    normed_test_data = dw.normed_test_data
-    test_target = dw.test_target
-    predicted = model(normed_test_data)
-    loss = dw.criterion(predicted, test_target)
-    return_mesg = "the loss of the model is: " + str(loss)
-    dw.model = model
-    epoch_done = dw.epoch_done + dw.epoch_batch
-    dw.epoch_done = epoch_done
-    logging.info(f"Epoch done : {str(epoch_done)}")
-    return return_mesg
-
-def condition(dw):
-    if dw.epoch_done >= dw.epoch_size: 
-        return True
-    else:
-        return False
-
 def test_model(dw):
+    import logging
+    logging.info("CALLED CALLED CALLED")
     normed_test_data = dw.normed_test_data
     test_target = dw.test_target
     predicted = dw.model(normed_test_data)
@@ -127,7 +97,63 @@ def test_model(dw):
     return_mesg = ""
     return return_mesg
 
+def trainingLoop(dw):
+    import logging
+    import torch;
+    import time
+    import threading 
+    import os
+    import ctypes
+
+    def condition(dw):
+        if dw.epoch_done >= dw.epoch_size: 
+            return True
+        else:
+            return False
+
+    model = dw.model
+    optimizer = torch.optim.RMSprop(model.parameters(), lr=0.001)
+    normed_train_data = dw.normed_train_data
+    normed_test_data = dw.normed_test_data
+    train_target = dw.train_target
+    criterion = dw.criterion
+    res = ""
+    for epoch in range(dw.epoch_batch):
+        predicted = model(normed_train_data)
+        loss = criterion(predicted, train_target)
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        end_time = time.time()
+        res = res + f"{str(end_time)},"
+        #test_model(dw)
+        condition(dw)
+
+    normed_test_data = dw.normed_test_data
+    test_target = dw.test_target
+    predicted = model(normed_test_data)
+    loss = dw.criterion(predicted, test_target)
+    #return_mesg = "the loss of the model is: " + str(loss)
+    dw.model = model
+    epoch_done = dw.epoch_done + dw.epoch_batch
+    dw.epoch_done = epoch_done
+    if ( epoch_done % 1000 == 0 ):
+        logging.info(f"Epoch done : {str(epoch_done)}")
+        # Get the current thread's ID
+    return res
+
+def condition(dw):
+    if dw.epoch_done >= dw.epoch_size: 
+        return True
+    else:
+        return False
+
+
+
 return_mesg = dw._Schedule(trainingLoop,condition,test_model,name)
+#return_mesg = dw._job(trainingLoop,condition,test_model,name)
+
+
 f = open("./result.txt", "a")
 f.write(str(return_mesg)+"\n")
 f.close()
