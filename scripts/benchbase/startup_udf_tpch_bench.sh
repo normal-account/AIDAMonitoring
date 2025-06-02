@@ -6,7 +6,8 @@ then
   exit 1
 fi
 
-for i in {1..8}; do
-	./run_benchmark.sh tpch > null$i.txt &
-	sleep 1
+for i in $(seq 1 $CLIENTS); do
+	$POSTGRESQL/bin/psql -U admin -d benchbase -c "select * from continuous_tpch_q17()" &
 done
+
+./add_lw_cgroup.sh

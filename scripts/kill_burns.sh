@@ -1,0 +1,1 @@
+pgrep -f "burn_cpu" | xargs kill -9 2> /dev/null

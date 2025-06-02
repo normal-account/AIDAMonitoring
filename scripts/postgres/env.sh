@@ -16,3 +16,4 @@ export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64/
 export CUDA_VISIBLE_DEVICES=1,0
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
+export CLIENTS=4

@@ -4,72 +4,30 @@ ENV TZ=America/Montreal
 ARG DEBIAN_FRONTEND=noninteractive
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN apt-get upgrade
-RUN apt-get dist-upgrade
-RUN apt-get update && apt-get -qq -y install curl		\
-&& apt-get install -y -qq automake	                                \
-                        autoconf                                \
-                        apt-utils                               \
-                        vim                                     \
+RUN apt update
+RUN apt upgrade -y 
+RUN apt dist-upgrade -y
+RUN apt install -y -qq  gcc                                     \
                         git                                     \
                         curl                                    \
-                        wget                                    \
-                        python3                                 \
-                        python3-dev                             \
-                        python3-pip                             \
-                        python3-sklearn                         \
-                        python3-sklearn-lib                     
-                        
+                        locales                                 \
+                        apt-utils                               \
+                        vim                                     \
+                        sudo                                    \
+                        openjdk-21-jre # for benchbase          \
+                        build-essential
 
-RUN apt-get install -y -qq lsb-release                              \
-                        sudo                                        \
-                        systemctl                                   \
-                        cmake                                       \
-                        bison                                       \
-                        mercurial                                    \
-                        libpcre2-dev                                \
-                        pkg-config                                  \
-                        libreadline-dev                             \
-                        liblzma-dev                                 \
-                        libtool                                     \
-                        locales                                     \
-                        gettext                                     \
-                        r-base		                    			\
-                        unixodbc-dev		                		\
-                        uuid-dev			                    	\
-                        zlib1g-dev			                    	\
-                        libcfitsio-dev		                		\
-                        liblz4-dev		                    		\
-                        libsnappy-dev		                		  \
-                        flex                                  \
-                        openjdk-21-jre # for benchbase
-
-
-# install python libraries. Note that AIDA only supports older versions of numpy and scipy.
-RUN pip3 install tblib                                           \
-  && pip3 install geopy                                          \
-  && pip3 install numpy==1.26.4                                  \
-  && pip3 install scipy==1.8.0                                   \
-  && pip3 install pandas                                         \
-  && pip3 install dill                                           \
-  && pip3 install six                                            \
-  && pip3 install dash                                           \
-  && pip3 install py-lz4framed                                   \
-  && pip3 install image                                          \
-  && pip3 install matplotlib                                     \
-  && pip3 install psycopg2-binary                                \
-  && pip3 install psycopg                                        \
-  && pip3 install pillow                                         \
-  && pip3 install py-lz4framed                                   \
-  && pip3 install plotly                                         \
-  && pip3 install dash dash-core-components dash-html-components flask-cors \
-  && pip3 install pickleshare              
-
-
-# tensorflow 2.18.0 requires numpy<2.1.0,>=1.26.0, but you have numpy 1.24.4 which is incompatible.
-
-RUN pip3 install torch torchvision torchaudio        \
-  && pip3 install tensorflow && pip3 install cupy-cuda12x
+RUN apt install -y -qq  libicu-dev                              \
+                        pkg-config                              \
+                        bison                                   \
+                        flex                                    \
+                        libreadline-dev                         \
+                        zlib1g-dev                              \
+                        cmake                                   \
+                        automake                                \
+                        libpq-dev                               \
+                        cgroup-tools                            \
+                        htop
 
 # Set system locale (used by DB)
 RUN locale-gen en_US.UTF-8   
@@ -79,25 +37,13 @@ RUN git clone -b REL_17_STABLE https://github.com/postgres/postgres.git /home/bu
 WORKDIR /home/build/postgres
 RUN mkdir -p /home/build/postgres/installdir
 RUN /home/build/postgres/configure --prefix=$PWD/installdir   \
-    --exec-prefix=$PWD/installdir --with-includes=/usr/local/lib/python3.10/dist-packages/numpy/core/include  \
-    --with-python                    \
+    --exec-prefix=$PWD/installdir        \
     &&  make  \
     &&  make install
 
-RUN mkdir -p /home/build/pg_storeddata
-COPY *.conf /home/build/postgres/
+RUN mkdir -p /home/build/postgres/pg_storeddata
 
 ENV PATH=/home/build/postgres/installdir/bin:$PATH
-
-# Build Multicorn 2 from source
-RUN git clone https://github.com/pgsql-io/multicorn2.git /home/build/multicorn2
-WORKDIR /home/build/multicorn2
-RUN make && make install
-
-COPY AIDA /home/build/AIDA
-COPY AIDA-Benchmarks /home/build/AIDA-Benchmarks
-
-# Gputil timeloop
 
 # Install benchbase
 RUN git clone https://github.com/cmu-db/benchbase.git /home/build/benchbase
@@ -107,15 +53,12 @@ RUN ./mvnw clean package -P postgres
 RUN tar xvzf target/benchbase-postgres.tgz
 
 # Copy scripts to container
-RUN chmod +x scripts/**/*
-COPY scripts/benchbase/* /home/build/benchbase/
+COPY scripts/benchbase/*.sh /home/build/benchbase/
+COPY scripts/benchbase/*.xml /home/build/benchbase/config/postgres/
 COPY scripts/postgres/* /home/build/postgres/
 COPY scripts/*.sh /home/build/
-COPY scripts/*.sql /home/build/
-RUN ln -s /home/build/postgres/env.sh /home/build/AIDA/aidaPostgreSQL/scripts/env.sh # Symbolic link for the env script
-# The * makes it optional, since postgres-data.zip is not in the repo by default
-run echo test
-COPY postgres-data.zip* /home/build/postgres/data.zip
+COPY *.c /home/build/
+COPY Makefile /home/build/
 
 # Setup user
 RUN adduser --quiet --disabled-password --gecos ""  aida-user && chown -R aida-user /home/build \
@@ -123,10 +66,12 @@ RUN adduser --quiet --disabled-password --gecos ""  aida-user && chown -R aida-u
 RUN chown aida-user -R /home/build
 USER aida-user
 
-# Run the env var script
+RUN chmod +x /home/build/*.sh
+RUN chmod +x /home/build/**/*.sh
+
+# Append the env var script to .bashrc
 RUN echo ". /home/build/postgres/env.sh" >> /home/aida-user/.bashrc
 
-# Needed so that CUDA correctly detects our GPU (default is 1,0)
-RUN echo "export CUDA_VISIBLE_DEVICES=0" >> /home/aida-user/.bashrc 
+WORKDIR /home/build/
 
-WORKDIR /home/build
+RUN make

@@ -1,25 +1,13 @@
-version: '1.0'
-
 services:
-  prometheus:
-    image: prom/prometheus
-    container_name: prometheus
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-
-  postgres:
+  postgres_benchbase:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: postgres_aida
+    container_name: postgres_benchbase
     command: ["/home/build/postgres/setup_server_postgres_version.sh"]
     network_mode: "host" 
     privileged: true    
     cgroup: host
-    ports:
-      - "5432:5432"
     deploy:
       resources:
         reservations:
@@ -27,23 +15,29 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter
-    container_name: postgres-exporter
-    network_mode: "host"        
-    environment:
-      - DATA_SOURCE_URI=localhost:5432/benchbase?sslmode=disable
-      - DATA_SOURCE_USER=test01
-      - DATA_SOURCE_PASS=test01
-    #volumes:
-    #  - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Mount config file
-    command:
-      - "--no-collector.stat_bgwriter"
-      - "--collector.stat_statements"
-    #  - "--config.file=/etc/prometheus/prometheus.yml"  # Tell exporter to use it
-    ports:
-      - "9187:9187"
-    depends_on:
-      - postgres
-
+  # 
+  #   prometheus:
+  #     image: prom/prometheus
+  #     container_name: prometheus
+  #     volumes:
+  #       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  #     ports:
+  #       - "9090:9090"
+  # postgres-exporter:
+  #   image: prometheuscommunity/postgres-exporter
+  #   container_name: postgres-exporter
+  #   network_mode: "host"        
+  #   environment:
+  #     - DATA_SOURCE_URI=localhost:5432/benchbase?sslmode=disable
+  #     - DATA_SOURCE_USER=test01
+  #     - DATA_SOURCE_PASS=test01
+  #   #volumes:
+  #   #  - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Mount config file
+  #   command:
+  #     - "--no-collector.stat_bgwriter"
+  #     - "--collector.stat_statements"
+  #   #  - "--config.file=/etc/prometheus/prometheus.yml"  # Tell exporter to use it
+  #   ports:
+  #     - "9187:9187"
+  #   depends_on:
+  #     - postgres
