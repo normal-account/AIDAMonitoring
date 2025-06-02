@@ -14,11 +14,28 @@ Then, attach to the container :
 docker container exec -it postgres_benchbase /bin/bash
 ```
 
+## Container credentials 
+
+
 **User**: `aida-user`
+
+
 **Password**: `aida`
 
 
-# 1. Running Benchbase benchmark
+## Database credentials
+
+**Database name**: `benchbase`
+
+
+**Database user**: `admin`
+
+
+**Database password**: `password`
+
+
+
+# 1. Running the Benchbase benchmark
 
 Travel to the Benchbase folder :
 
@@ -29,7 +46,7 @@ cd /home/build/benchbase
 To run 4 clients of YCSB without competing UDFs, you can run:
 
 ```
-sudo cgexec -g "cpu:parent/hw" ./run_benchmark.sh ycsb
+./run_benchmark.sh ycsb
 ```
 
 Then, if you want to start the 4 competing UDFs, you can run the following command from another terminal:
@@ -39,6 +56,7 @@ Then, if you want to start the 4 competing UDFs, you can run the following comma
 ```
 
 The number of Benchbase clients is specified in the `config/postgres/sample_ycsb_config.xml` file.
+
 The number of UDF clients is specified by the `CLIENTS` env var (default value is 4).
 
 If you change the number of clients, you'll also need to rerun the cgroup script:
@@ -48,7 +66,8 @@ If you change the number of clients, you'll also need to rerun the cgroup script
 ```
 
 
-# 2. Running intermittent burn benchmark
+
+# 2. Running the intermittent burn benchmark
 
 From the `/home/build/` folder, there's a Makefile which compiled `burn_cpu` and `intermittent_burn_cpu` during the Docker build.
 
