@@ -10,4 +10,5 @@ for i in $(seq 1 $CLIENTS); do
 	$POSTGRESQL/bin/psql -U admin -d benchbase -c "select * from continuous_tpch_q17()" &
 done
 
+./add_hw_cgroup.sh
 ./add_lw_cgroup.sh
