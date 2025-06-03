@@ -69,8 +69,11 @@ USER aida-user
 RUN chmod +x /home/build/*.sh
 RUN chmod +x /home/build/**/*.sh
 
-# Append the env var script to .bashrc
+# Append the env var script to .bashrc so env vars are set on login
 RUN echo ". /home/build/postgres/env.sh" >> /home/aida-user/.bashrc
+
+# Create cgroups on login
+RUN echo "/home/build/create_cgroups.sh &> /dev/null" >> /home/aida-user/.bashrc
 
 WORKDIR /home/build/
 

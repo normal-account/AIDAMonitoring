@@ -2,10 +2,6 @@
 
 . /home/build/postgres/env.sh # Setup the env vars
 
-# Create cgroups
-
-/home/build/create_cgroups.sh
-
 # Start the database server.
 initdb -d $PGDATADIR
 mkdir -p $PGLOGDIR
