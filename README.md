@@ -67,7 +67,7 @@ The number of Benchbase clients is specified in the `config/postgres/sample_ycsb
 
 The number of UDF clients is specified by the `CLIENTS` env var (default value is 4).
 
-If change the number of UDF clients, you'll also need to rerun the cgroup script:
+If you change the number of UDF clients, you'll also need to rerun the cgroup script:
 
 ```
 ./create_cgroups.sh # This will recreate the cgroups (and update cpuset.cpus)
@@ -93,7 +93,7 @@ To run 4 clients of `intermittent_burn_cpu` without competition, run:
 ```
 
 
-Note that `intermittent_burn_cpu` runs for 30 seconds by default. You'll need to recompile it to change that.
+Note that `intermittent_burn_cpu` runs for 30 seconds by default and `burn_cpu` runs until killed. You'll need to recompile the programs to change that.
 
 
 # 3. Running the custom SQL-query benchmark
